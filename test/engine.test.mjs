@@ -115,45 +115,38 @@ const resBigMac = calculateSalary({
     monthlySalary: 78000,
     rewardType: 'bigmac'
 }, new Date(2026, 8, 14, 12, 0, 0));
-// 7. Cookie 與本機儲存雙重持久化測試 (模擬瀏覽器環境)
-import { setCookie, getCookie, deleteCookie, loadConfig, saveConfig, resetConfig, DEFAULT_CONFIG } from '../src/core/storage.js';
+// 7. 本機儲存空間 (LocalStorage) 存取與清理測試 (模擬瀏覽器環境)
+import { loadConfig, saveConfig, resetConfig, DEFAULT_CONFIG } from '../src/core/storage.js';
 
-// 模擬瀏覽器 document 物件
-globalThis.document = {
-    _cookie: '',
-    get cookie() { return this._cookie; },
-    set cookie(val) {
-        // 簡單模擬 cookie 設定行為（提取 key=value）
-        const pair = val.split(';')[0];
-        const [k, v] = pair.split('=');
-        const cookies = this._cookie ? this._cookie.split('; ') : [];
-        const filtered = cookies.filter(item => !item.startsWith(k + '='));
-        if (val.includes('Max-Age=0') || val.includes('Thu, 01 Jan 1970')) {
-            this._cookie = filtered.join('; ');
-        } else {
-            filtered.push(`${k}=${v}`);
-            this._cookie = filtered.join('; ');
-        }
-    }
+// 模擬瀏覽器 LocalStorage 物件
+const mockStorage = new Map();
+globalThis.localStorage = {
+    getItem: (key) => mockStorage.get(key) || null,
+    setItem: (key, val) => mockStorage.set(key, String(val)),
+    removeItem: (key) => mockStorage.delete(key),
+    clear: () => mockStorage.clear()
 };
 
-setCookie('test_cookie', 'hello_taiwan');
-assert(getCookie('test_cookie') === 'hello_taiwan', 'Cookie 應能正常寫入並讀取');
+// 測試預設載入
+const initialConfig = loadConfig();
+assert(initialConfig.monthlySalary === 40000, '初始設定預設月薪應為 40000');
+assert(initialConfig.salaryMode === 'workday', '初始計薪模式應為 workday');
 
-deleteCookie('test_cookie');
-assert(getCookie('test_cookie') === null, 'Cookie 刪除後應回傳 null');
+// 測試儲存與更新
+const customConfig = { ...DEFAULT_CONFIG, monthlySalary: 66000, bossKeyDisguise: 'clock' };
+const saveOk = saveConfig(customConfig);
+assert(saveOk === true, '儲存設定至 LocalStorage 應回傳 true');
 
-// 測試 saveConfig 與 loadConfig 在純 Cookie 環境下的 fallback 運作
-delete globalThis.localStorage; // 模擬 LocalStorage 停用或無痕視窗
-const testConfig = { ...DEFAULT_CONFIG, monthlySalary: 88888, bossKeyDisguise: 'clock' };
-saveConfig(testConfig);
-const loadedFromCookie = loadConfig();
-assert(loadedFromCookie.monthlySalary === 88888, '當無 LocalStorage 時，應自動從 Cookie 成功讀取設定 (Fallback 成功)');
-assert(loadedFromCookie.bossKeyDisguise === 'clock', 'Cookie 讀取之偽裝模式應為 clock');
+const reloadedConfig = loadConfig();
+assert(reloadedConfig.monthlySalary === 66000, '重新讀取之月薪應為 66000');
+assert(reloadedConfig.bossKeyDisguise === 'clock', '重新讀取之偽裝模式應為 clock');
 
+// 測試重設為預設值
 resetConfig();
-const resetRes = loadConfig();
-assert(resetRes.monthlySalary === DEFAULT_CONFIG.monthlySalary, '重設後應恢復預設月薪');
+const afterResetConfig = loadConfig();
+assert(afterResetConfig.monthlySalary === DEFAULT_CONFIG.monthlySalary, '重設後應恢復預設月薪 40000');
+assert(mockStorage.size === 0, '重設後 LocalStorage 快取應被清空');
 
-console.log(`\n🎉 全部 ${passedTests}/${totalTests} 項單元測試成功通過！核心運算與 Cookie 本機儲存邏輯精確無誤。`);
+console.log(`\n🎉 全部 ${passedTests}/${totalTests} 項單元測試成功通過！核心運算與 LocalStorage 本機儲存邏輯精確無誤。`);
+
 
