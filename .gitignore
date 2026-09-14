@@ -1,0 +1,27 @@
+# 依賴套件
+node_modules/
+vendor/
+
+# 編譯與建置輸出
+dist/
+build/
+out/
+*.exe
+*.pyc
+__pycache__/
+
+# 環境變數與機密設定
+.env
+.env.local
+*.local
+
+# 編輯器與系統暫存檔
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.log
+
+# 執行期狀態紀錄（如視窗座標記憶等本機快取）
+window_pos.json
+storage/
