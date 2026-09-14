@@ -4,6 +4,8 @@
 
 支援最新 Chrome / Edge 原生 **畫中畫置頂懸浮視窗 (Document PiP)** 與 **一鍵老闆鍵防窺保護**。
 
+👉 **線上免安裝立即體驗 (Live Demo)**：[https://salary-clock-378.pages.dev/](https://salary-clock-378.pages.dev/)
+
 ---
 
 ## 💡 專案緣起與鳴謝 (Credits)
