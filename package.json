@@ -1,0 +1,19 @@
+{
+  "name": "salary-clock",
+  "version": "1.0.0",
+  "description": "即時薪資視覺化工具 - 支援 Document PiP 桌面置頂懸浮、4 位數老虎機滾輪與老闆鍵防窺",
+  "main": "index.html",
+  "type": "module",
+  "scripts": {
+    "test": "node test/engine.test.mjs",
+    "deploy": "wrangler pages deploy . --project-name=salary-clock"
+  },
+  "keywords": [
+    "salary-clock",
+    "pip",
+    "document-pip",
+    "visualization"
+  ],
+  "author": "carbeso",
+  "license": "MIT"
+}
