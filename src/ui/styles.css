@@ -899,3 +899,29 @@ body.pip-mode-active.is-disguised .pip-bottom-row {
         display: none;
     }
 }
+
+/* ================= 頁尾開源鳴謝與連結 ================= */
+.footer {
+    text-align: center;
+    padding: 24px 20px 36px;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    line-height: 1.6;
+}
+
+.footer p {
+    margin-bottom: 6px;
+}
+
+.footer a {
+    color: var(--accent-indigo);
+    text-decoration: none;
+    font-weight: 500;
+    transition: color 0.2s ease;
+}
+
+.footer a:hover {
+    color: #a5b4fc;
+    text-decoration: underline;
+}
+

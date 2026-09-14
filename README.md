@@ -9,6 +9,11 @@
 ## 💡 專案緣起與鳴謝 (Credits)
 
 本專案的核心構想參考自社群同好優秀的「即時薪水計時器 / 薪資時鐘」概念。因深感在漫長工作日中看著微小進度跳動能帶來極大心理慰藉，特此以現代化 Web 技術與更嚴謹的工時演算法重構此版本：
+
+- **原始概念討論串**：感謝 [@termcavetw 在 Threads 上的發想討論](https://www.threads.com/@termcavetw/post/DcyMmfQDzqw)
+- **參考程式概念**：感謝 [@duratgw0413 在 Threads 上的程式實作概念分享](https://www.threads.com/@duratgw0413/post/Dc2-zrRGMUX)
+
+本版本在此基礎上進一步重構與功能延伸：
 - 升級為 **Document Picture-in-Picture API**，不需安裝第三方軟體即可在 Windows 桌面置頂懸浮。
 - 引入 **4 位數老虎機微秒級轉輪 (Slot Machine Reel)**，極致流暢且精準對齊。
 - 加入嚴謹的淨工時防漂移、午休凍結、平閏年換算與工作日/自由接案雙模式。
