@@ -1,9 +1,71 @@
 /**
  * 薪資時鐘 - 本機設定與狀態儲存模組 (Storage)
- * 使用瀏覽器本機 LocalStorage 進行設定儲存，完全在使用者本機運行，零網路連線、保障隱私
+ * 支援雙重儲存機制：瀏覽器本機 LocalStorage + 本機 Cookie 備份
+ * 完全在使用者本機運行，零網路連線、保障個人財務隱私
  */
 
 const STORAGE_KEY = 'salary_clock_user_config_v1';
+const COOKIE_KEY = 'salary_clock_user_config_v1';
+
+/**
+ * 安全寫入 Cookie 至本機
+ * @param {string} name - Cookie 名稱
+ * @param {string} value - Cookie 數值
+ * @param {number} [days=365] - 保存天數（預設 365 天）
+ */
+export function setCookie(name, value, days = 365) {
+    if (typeof document === 'undefined') return;
+    try {
+        const d = new Date();
+        d.setTime(d.getTime() + (days * 24 * 60 * 60 * 1000));
+        const expires = `expires=${d.toUTCString()}`;
+        // 使用 encodeURIComponent 避免 JSON 特殊字元 (如逗號、分號、空白) 損壞 Cookie 格式
+        const encodedVal = encodeURIComponent(value);
+        // 設定路徑為根目錄，並採用 SameSite=Lax 防護
+        const isSecure = typeof location !== 'undefined' && location.protocol === 'https:';
+        document.cookie = `${name}=${encodedVal};${expires};path=/;SameSite=Lax${isSecure ? ';Secure' : ''}`;
+    } catch (e) {
+        console.warn('寫入 Cookie 失敗：', e);
+    }
+}
+
+/**
+ * 讀取本機 Cookie 數值
+ * @param {string} name - Cookie 名稱
+ * @returns {string|null} Cookie 數值字串或 null
+ */
+export function getCookie(name) {
+    if (typeof document === 'undefined') return null;
+    try {
+        const nameEQ = `${name}=`;
+        const ca = document.cookie.split(';');
+        for (let i = 0; i < ca.length; i++) {
+            let c = ca[i];
+            while (c.charAt(0) === ' ') c = c.substring(1, c.length);
+            if (c.indexOf(nameEQ) === 0) {
+                const encodedVal = c.substring(nameEQ.length, c.length);
+                return decodeURIComponent(encodedVal);
+            }
+        }
+        return null;
+    } catch (e) {
+        console.warn('讀取 Cookie 失敗：', e);
+        return null;
+    }
+}
+
+/**
+ * 清除指定的本機 Cookie
+ * @param {string} name - Cookie 名稱
+ */
+export function deleteCookie(name) {
+    if (typeof document === 'undefined') return;
+    try {
+        document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/;SameSite=Lax`;
+    } catch (e) {
+        console.warn('清除 Cookie 失敗：', e);
+    }
+}
 
 /**
  * 多元趣味激勵指標預設庫
@@ -63,15 +125,42 @@ export const DEFAULT_CONFIG = {
 };
 
 /**
- * 載入使用者設定（若無或損毀則自動回傳預設值）
+ * 載入使用者設定
+ * 支援雙軌機制：優先讀取 LocalStorage，若無或損毀則自動退回讀取 Cookie；若兩者皆無則載入預設值
  * @returns {Object} 使用者設定物件
  */
 export function loadConfig() {
-    try {
-        const raw = localStorage.getItem(STORAGE_KEY);
-        if (!raw) {
-            return { ...DEFAULT_CONFIG };
+    let raw = null;
+
+    // 1. 優先從 LocalStorage 讀取
+    if (typeof localStorage !== 'undefined') {
+        try {
+            raw = localStorage.getItem(STORAGE_KEY);
+        } catch (e) {
+            console.warn('讀取 LocalStorage 受限，嘗試改由 Cookie 讀取：', e);
         }
+    }
+
+    // 2. 若 LocalStorage 無資料，退回讀取本機 Cookie (Fallback)
+    if (!raw) {
+        const cookieRaw = getCookie(COOKIE_KEY);
+        if (cookieRaw) {
+            raw = cookieRaw;
+            // 回補至 LocalStorage 保持兩者同步
+            if (typeof localStorage !== 'undefined') {
+                try {
+                    localStorage.setItem(STORAGE_KEY, cookieRaw);
+                } catch (_) {}
+            }
+        }
+    }
+
+    // 3. 解析 JSON 資料或回傳預設值
+    if (!raw) {
+        return { ...DEFAULT_CONFIG };
+    }
+
+    try {
         const parsed = JSON.parse(raw);
         // 採用物件擴展，確保新增的欄位能正確補齊預設值
         return {
@@ -83,35 +172,59 @@ export function loadConfig() {
             }
         };
     } catch (e) {
-        console.warn('載入本機設定失敗，已重設為預設值：', e);
+        console.warn('設定資料解析失敗，已重設為預設值：', e);
         return { ...DEFAULT_CONFIG };
     }
 }
 
 /**
- * 儲存使用者設定至本機 LocalStorage
+ * 儲存使用者設定至本機
+ * 同步寫入 LocalStorage 與 Cookie，達到雙重持久化保障
  * @param {Object} newConfig - 新設定物件
  * @returns {boolean} 儲存是否成功
  */
 export function saveConfig(newConfig) {
-    try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(newConfig));
-        return true;
-    } catch (e) {
-        console.error('儲存設定至 LocalStorage 失敗：', e);
-        return false;
+    const jsonString = JSON.stringify(newConfig);
+    let success = false;
+
+    // 1. 儲存至 LocalStorage
+    if (typeof localStorage !== 'undefined') {
+        try {
+            localStorage.setItem(STORAGE_KEY, jsonString);
+            success = true;
+        } catch (e) {
+            console.warn('儲存設定至 LocalStorage 失敗：', e);
+        }
     }
+
+    // 2. 同步寫入本機 Cookie（保存 365 天）
+    try {
+        setCookie(COOKIE_KEY, jsonString, 365);
+        success = true;
+    } catch (e) {
+        console.warn('儲存設定至 Cookie 失敗：', e);
+    }
+
+    return success;
 }
 
 /**
  * 重設所有設定至系統初始預設值
+ * 同步清除 LocalStorage 與 Cookie 快取
  * @returns {Object} 預設設定物件
  */
 export function resetConfig() {
-    try {
-        localStorage.removeItem(STORAGE_KEY);
-    } catch (e) {
-        console.warn('清除本機設定快取失敗：', e);
+    // 清除 LocalStorage
+    if (typeof localStorage !== 'undefined') {
+        try {
+            localStorage.removeItem(STORAGE_KEY);
+        } catch (e) {
+            console.warn('清除 LocalStorage 失敗：', e);
+        }
     }
+
+    // 清除 Cookie
+    deleteCookie(COOKIE_KEY);
+
     return { ...DEFAULT_CONFIG };
 }
