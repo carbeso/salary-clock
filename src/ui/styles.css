@@ -466,63 +466,6 @@ body {
     color: var(--accent-amber);
 }
 
-/* 戰利品圖示牆 (每完成 1 個放 1 張圖) */
-.reward-badges-wall {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 8px;
-    min-height: 48px;
-    padding: 10px 14px;
-    background: rgba(0, 0, 0, 0.3);
-    border-radius: var(--radius-sm);
-    border: 1px dashed rgba(255, 255, 255, 0.12);
-}
-
-.reward-badge-item {
-    font-size: 1.6rem;
-    line-height: 1;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    filter: drop-shadow(0 0 5px rgba(245, 158, 11, 0.4));
-    transition: transform 0.2s ease;
-    user-select: none;
-}
-
-.reward-badge-item:hover {
-    transform: scale(1.25);
-}
-
-.reward-badges-empty {
-    font-size: 0.82rem;
-    color: var(--text-muted);
-}
-
-/* 戰利品牆展開/收合按鈕 */
-.reward-expand-btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    padding: 3px 10px;
-    font-size: 0.82rem;
-    font-weight: 600;
-    color: var(--accent-amber);
-    background: rgba(245, 158, 11, 0.15);
-    border: 1px solid rgba(245, 158, 11, 0.35);
-    border-radius: 9999px;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    user-select: none;
-}
-
-.reward-expand-btn:hover {
-    background: rgba(245, 158, 11, 0.25);
-    border-color: rgba(245, 158, 11, 0.6);
-    transform: translateY(-1px);
-    box-shadow: 0 0 8px rgba(245, 158, 11, 0.3);
-}
-
 .reward-progress-wrapper {
     display: flex;
     flex-direction: column;

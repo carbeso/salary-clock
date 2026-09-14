@@ -58,7 +58,6 @@ class SalaryClockApp {
             rewardName: document.getElementById('reward-name'),
             rewardSubtext: document.getElementById('reward-subtext'),
             rewardCountVal: document.getElementById('reward-count-val'),
-            rewardBadgesWall: document.getElementById('reward-badges-wall'),
             rewardProgressFill: document.getElementById('reward-progress-fill'),
             rewardProgressHint: document.getElementById('reward-progress-hint'),
 
@@ -212,9 +211,6 @@ class SalaryClockApp {
         if (this.activeView === view) return;
         this.activeView = view;
 
-        // 優化方案 2：切換維度時自動重設為預設收合狀態（上限 30 個），避免切到本月時瞬間建立百個節點造成卡頓
-        this.badgesExpanded = false;
-
         if (this.dom.cardPeriodToday) this.dom.cardPeriodToday.classList.toggle('active', view === 'today');
         if (this.dom.cardPeriodWeek) this.dom.cardPeriodWeek.classList.toggle('active', view === 'week');
         if (this.dom.cardPeriodMonth) this.dom.cardPeriodMonth.classList.toggle('active', view === 'month');
@@ -363,18 +359,6 @@ class SalaryClockApp {
             this.dom.rewardCountVal.textContent = `${completedCount} ${reward.unit}`;
             this.dom.rewardProgressFill.style.width = `${currentProgress.toFixed(1)}%`;
             this.dom.rewardProgressHint.textContent = `目前累進進度 ${currentProgress.toFixed(1)}%`;
-
-            // 保存目前指標資料供點擊展開/收合重繪使用
-            this.currentBadgeCount = completedCount;
-            this.currentBadgeIcon = reward.icon || '☕';
-            this.currentBadgeUnit = reward.unit || '個';
-
-            // 渲染戰利品圖示牆
-            const badgeKey = `${completedCount}_${reward.icon}_${this.activeView}_${this.badgesExpanded}`;
-            if (this.lastBadgeKey !== badgeKey) {
-                this.lastBadgeKey = badgeKey;
-                this.renderRewardBadges(completedCount, reward.icon, reward.unit);
-            }
         }
 
         // 6. 下方三維度卡片（本日、本週、本月）數據更新
@@ -665,75 +649,6 @@ class SalaryClockApp {
             this.startTickLoop();
             this.closeSettings();
         }
-    }
-    /**
-     * 動態渲染戰利品圖案收集牆 (無條件捨去紀錄圖案)
-     * 優化方案 1：採用 DocumentFragment 於記憶體中批次組裝節點，一次性掛載至 DOM，
-     * 徹底消除重複 appendChild 觸發的上百次 Reflow/Repaint 重排重繪卡頓
-     * @param {number} count - 已達成整數數量
-     * @param {string} icon - 圖示字元 (如 ☕, 🍔, 📈, 💎)
-     * @param {string} unit - 單位名稱
-     */
-    renderRewardBadges(count, icon, unit) {
-        const wall = this.dom.rewardBadgesWall;
-        if (!wall) return;
-
-        // 清空既有圖示
-        wall.innerHTML = '';
-
-        if (count <= 0) {
-            const emptyHint = document.createElement('span');
-            emptyHint.className = 'reward-badges-empty';
-            emptyHint.textContent = `努力工作中，今日即將解鎖第 1 ${unit} ${icon} ...`;
-            wall.appendChild(emptyHint);
-            return;
-        }
-
-        // 依據使用者需求：預設顯示上限為 30 個圖示，可點擊展開顯示全部
-        const defaultLimit = 30;
-        const shouldLimit = (count > defaultLimit) && !this.badgesExpanded;
-        const renderCount = shouldLimit ? defaultLimit : count;
-
-        // 建立 DocumentFragment 虛擬節點容器，批次在記憶體中建立元素
-        const fragment = document.createDocumentFragment();
-
-        for (let i = 0; i < renderCount; i++) {
-            const badge = document.createElement('span');
-            badge.className = 'reward-badge-item';
-            badge.textContent = icon;
-            badge.title = `第 ${i + 1} ${unit}`;
-            fragment.appendChild(badge);
-        }
-
-        // 若超過 30 個，提供點擊切換展開/收合全部之互動按鈕
-        if (count > defaultLimit) {
-            const toggleBtn = document.createElement('button');
-            toggleBtn.className = 'reward-expand-btn';
-            toggleBtn.type = 'button';
-
-            if (!this.badgesExpanded) {
-                toggleBtn.innerHTML = `<span>+${count - defaultLimit} ${unit}</span> <span>(點擊展開全部) ▾</span>`;
-                toggleBtn.title = `點擊展開全部 ${count} 個戰利品圖示`;
-                toggleBtn.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    this.badgesExpanded = true;
-                    this.renderRewardBadges(this.currentBadgeCount, this.currentBadgeIcon, this.currentBadgeUnit);
-                });
-            } else {
-                toggleBtn.innerHTML = `<span>▲ 收合 (僅顯示 30 個)</span>`;
-                toggleBtn.title = '點擊收合戰利品圖示牆';
-                toggleBtn.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    this.badgesExpanded = false;
-                    this.renderRewardBadges(this.currentBadgeCount, this.currentBadgeIcon, this.currentBadgeUnit);
-                });
-            }
-
-            fragment.appendChild(toggleBtn);
-        }
-
-        // 一次性批次寫入真實 DOM，Reflow 次數僅為 1 次，極致流暢
-        wall.appendChild(fragment);
     }
 }
 
