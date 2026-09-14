@@ -24,9 +24,9 @@
             <a href="https://github.com/carbeso/salary-clock" target="_blank" rel="noopener noreferrer" class="btn btn-github" title="前往 GitHub 檢視原始碼或 Fork">
                 <span class="btn-icon">🐙</span><span class="btn-text"> GitHub</span>
             </a>
-            <!-- 桌面畫中畫懸浮置頂按鈕 -->
+            <!-- 桌面懸浮 / 手機全螢幕時鐘按鈕 -->
             <button id="btn-pip" class="btn btn-pip" title="彈出永遠置頂桌面懸浮小視窗 (支援 Chrome / Edge)">
-                <span class="btn-icon">📌</span><span class="btn-text"> 桌面懸浮</span>
+                <span id="pip-btn-icon" class="btn-icon">📌</span><span id="pip-btn-text" class="btn-text"> 桌面懸浮</span>
             </button>
             <!-- 老闆鍵防窺按鈕 (快捷鍵: B 或 Esc) -->
             <button id="btn-boss-key" class="btn" title="切換老闆鍵防窺保護 (快捷鍵: B)">
@@ -44,14 +44,23 @@
 
         <!-- 1. 核心英雄卡片：聚焦展示選取維度的累積金額與戰利品換算 -->
         <section class="hero-card" id="hero-card">
-            <!-- 英雄卡頂部列：左側為當前累積維度標籤，右側為工作狀態燈號（風格與下方卡片完全一致） -->
+            <!-- 英雄卡頂部列：左側為當前累積維度標籤，右側為工作狀態燈號與橫向時鐘控制鈕 -->
             <div class="hero-card-header">
-                <div class="hero-amount-label" id="amount-label">
-                    <span id="amount-label-icon">☀️</span> <span id="amount-label-text">本日累積</span>
+                <div class="hero-header-left">
+                    <div class="hero-amount-label" id="amount-label">
+                        <span id="amount-label-icon">☀️</span> <span id="amount-label-text">本日累積</span>
+                    </div>
+                    <div class="status-badge" id="status-badge">
+                        <span id="status-dot">🟢</span>
+                        <span id="status-text">載入中...</span>
+                    </div>
                 </div>
-                <div class="status-badge" id="status-badge">
-                    <span id="status-dot">🟢</span>
-                    <span id="status-text">載入中...</span>
+
+                <!-- 手機橫向全螢幕時鐘專屬之極簡懸浮控制列 (預設隱藏，橫向全螢幕時啟用) -->
+                <div class="landscape-clock-controls" id="landscape-clock-controls">
+                    <button id="btn-landscape-disguise" class="clock-ctrl-btn" title="切換老闆鍵防窺">🕶️</button>
+                    <button id="btn-landscape-settings" class="clock-ctrl-btn" title="偏好設定">⚙️</button>
+                    <button id="btn-exit-fullscreen" class="clock-ctrl-btn" title="退出全螢幕時鐘">✕</button>
                 </div>
             </div>
 

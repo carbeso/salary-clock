@@ -26,9 +26,17 @@ class SalaryClockApp {
         this.dom = {
             // 頂部動作列
             btnPip: document.getElementById('btn-pip'),
+            pipBtnIcon: document.getElementById('pip-btn-icon'),
+            pipBtnText: document.getElementById('pip-btn-text'),
             btnBossKey: document.getElementById('btn-boss-key'),
             btnSettings: document.getElementById('btn-settings'),
             bossKeyIcon: document.getElementById('boss-key-icon'),
+
+            // 手機橫向全螢幕時鐘控制項
+            landscapeClockControls: document.getElementById('landscape-clock-controls'),
+            btnExitFullscreen: document.getElementById('btn-exit-fullscreen'),
+            btnLandscapeDisguise: document.getElementById('btn-landscape-disguise'),
+            btnLandscapeSettings: document.getElementById('btn-landscape-settings'),
 
             // 1. 核心英雄卡片
             heroCard: document.getElementById('hero-card'),
@@ -149,10 +157,16 @@ class SalaryClockApp {
      * 啟動初始化流程
      */
     init() {
+        this.setupDeviceSpecificFeatures();
         this.bindEvents();
         this.syncSettingsForm();
         this.updateModeUI();
         this.bossKey.setMode(this.config.bossKeyDisguise || 'mask');
+
+        // 檢查初始螢幕方向（若進入時就已是手機橫向則套用時鐘樣式）
+        if (this.isLandscapeOrientation()) {
+            document.body.classList.add('is-landscape-clock');
+        }
 
         // 啟動每秒 10 次的平滑刷新迴圈 (100ms)
         this.startTickLoop();
@@ -194,8 +208,51 @@ class SalaryClockApp {
         this.dom.amountWrapper.addEventListener('click', triggerBossKey);
         this.dom.amountWrapper.addEventListener('pointerdown', triggerBossKey);
 
-        // 桌面懸浮視窗 (PiP) 開啟
-        this.dom.btnPip.addEventListener('click', () => this.togglePiP());
+        // 桌面懸浮視窗 (PiP) 或 手機全螢幕時鐘按鈕事件
+        if (this.dom.btnPip) {
+            this.dom.btnPip.addEventListener('click', () => {
+                if (this.isMobileDevice() || !this.pipController.isSupported()) {
+                    this.toggleFullscreenClock();
+                } else {
+                    this.togglePiP();
+                }
+            });
+        }
+
+        // 手機橫向全螢幕時鐘專屬之極簡懸浮控制鈕事件
+        if (this.dom.btnExitFullscreen) {
+            this.dom.btnExitFullscreen.addEventListener('click', () => this.exitFullscreenClock());
+        }
+        if (this.dom.btnLandscapeDisguise) {
+            this.dom.btnLandscapeDisguise.addEventListener('click', () => this.bossKey.toggle());
+        }
+        if (this.dom.btnLandscapeSettings) {
+            this.dom.btnLandscapeSettings.addEventListener('click', () => this.openSettings());
+        }
+
+        // 監聽全螢幕狀態切換事件（含使用者按下 Esc 鍵退出）
+        document.addEventListener('fullscreenchange', () => {
+            const isFull = !!document.fullscreenElement;
+            if (isFull) {
+                document.body.classList.add('is-landscape-clock');
+            } else if (!this.isLandscapeOrientation()) {
+                document.body.classList.remove('is-landscape-clock');
+            }
+        });
+
+        // 監聽手機螢幕轉向與視窗縮放
+        const handleOrientationChange = () => {
+            if (this.isLandscapeOrientation()) {
+                document.body.classList.add('is-landscape-clock');
+            } else if (!document.fullscreenElement) {
+                document.body.classList.remove('is-landscape-clock');
+            }
+        };
+
+        window.addEventListener('resize', handleOrientationChange);
+        if (screen.orientation) {
+            screen.orientation.addEventListener('change', handleOrientationChange);
+        }
 
         // 自由接案碼錶按鈕
         this.dom.btnFreelanceToggle.addEventListener('click', () => this.toggleFreelanceTimer());
@@ -497,6 +554,86 @@ class SalaryClockApp {
             document.body.classList.remove('is-disguised');
             this.dom.bossKeyIcon.textContent = '🕶️';
             this.dom.btnBossKey.classList.remove('btn-primary');
+        }
+    }
+
+    /**
+     * 精準判斷當前執行環境是否為行動裝置（手機 / 平板）
+     * 結合觸控特性、User-Agent 與行動螢幕特徵
+     * @returns {boolean}
+     */
+    isMobileDevice() {
+        // 1. 觸控粗指標判斷 (手機 / 平板皆無精準滑鼠 hover)
+        const isTouchCoarse = window.matchMedia('(hover: none) and (pointer: coarse)').matches;
+        // 2. 標準行動裝置 User-Agent 正則表達式檢驗
+        const uaMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile/i.test(navigator.userAgent);
+        // 3. 觸控點大於 0 且解析度在行動範疇
+        const maxTouch = (navigator.maxTouchPoints > 0) && (window.innerWidth <= 1024 || window.innerHeight <= 1024);
+
+        return isTouchCoarse || uaMobile || maxTouch;
+    }
+
+    /**
+     * 判斷當前是否處於手機橫向擺放狀態 (Landscape 且垂直高度較小)
+     * @returns {boolean}
+     */
+    isLandscapeOrientation() {
+        return window.innerWidth > window.innerHeight && window.innerHeight <= 560;
+    }
+
+    /**
+     * 依據設備種類（桌機 vs 行動裝置）配置專屬功能按鈕
+     */
+    setupDeviceSpecificFeatures() {
+        const isMobile = this.isMobileDevice();
+        if (isMobile) {
+            // 行動裝置：將原桌面懸浮按鈕無縫升級為「全螢幕時鐘」
+            if (this.dom.btnPip) {
+                this.dom.btnPip.setAttribute('title', '切換為全螢幕大計時鐘模式 (適合橫放桌面展示)');
+                if (this.dom.pipBtnIcon) this.dom.pipBtnIcon.textContent = '⏱️';
+                if (this.dom.pipBtnText) this.dom.pipBtnText.textContent = ' 全螢幕';
+            }
+        } else {
+            // 桌機：檢查是否支援 Document PiP，若不支援則降級為全螢幕時鐘
+            if (!this.pipController.isSupported() && this.dom.btnPip) {
+                this.dom.btnPip.setAttribute('title', '瀏覽器未支援置頂懸浮，改為全螢幕時鐘模式');
+                if (this.dom.pipBtnIcon) this.dom.pipBtnIcon.textContent = '⏱️';
+                if (this.dom.pipBtnText) this.dom.pipBtnText.textContent = ' 全螢幕';
+            }
+        }
+    }
+
+    /**
+     * 切換手機全螢幕大計時鐘模式
+     */
+    async toggleFullscreenClock() {
+        if (!document.fullscreenElement && !document.body.classList.contains('is-landscape-clock')) {
+            try {
+                if (document.documentElement.requestFullscreen) {
+                    await document.documentElement.requestFullscreen();
+                }
+            } catch (err) {
+                console.warn('Fullscreen request blocked or failed:', err);
+            }
+            document.body.classList.add('is-landscape-clock');
+        } else {
+            await this.exitFullscreenClock();
+        }
+    }
+
+    /**
+     * 退出全螢幕時鐘模式
+     */
+    async exitFullscreenClock() {
+        document.body.classList.remove('is-landscape-clock');
+        if (document.fullscreenElement) {
+            try {
+                if (document.exitFullscreen) {
+                    await document.exitFullscreen();
+                }
+            } catch (err) {
+                console.warn('Exit fullscreen failed:', err);
+            }
         }
     }
 
