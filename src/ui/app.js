@@ -182,7 +182,17 @@ class SalaryClockApp {
 
         // 老闆鍵防窺：點擊按鈕或點擊主金額
         this.dom.btnBossKey.addEventListener('click', () => this.bossKey.toggle());
-        this.dom.amountWrapper.addEventListener('click', () => this.bossKey.toggle());
+
+        let lastToggleTime = 0;
+        const triggerBossKey = (e) => {
+            const now = Date.now();
+            if (now - lastToggleTime < 250) return;
+            lastToggleTime = now;
+            this.bossKey.toggle();
+        };
+
+        this.dom.amountWrapper.addEventListener('click', triggerBossKey);
+        this.dom.amountWrapper.addEventListener('pointerdown', triggerBossKey);
 
         // 桌面懸浮視窗 (PiP) 開啟
         this.dom.btnPip.addEventListener('click', () => this.togglePiP());
@@ -289,17 +299,47 @@ class SalaryClockApp {
 
         if (decimals === 4) {
             this.dom.heroAmount.classList.add('is-rolling');
-            // 老虎機滾輪式 HTML (每個小數位數為一個獨立垂直滾筒)
-            const rollerHtml = decPart.split('').map((digit, idx) => {
-                const targetY = -Number(digit) * 1.15; // 每個數字高度 1.15em
-                const isFast = idx >= 2 ? 'fast-rolling' : '';
-                return `<span class="digit-slot ${isFast}"><span class="digit-slot-strip" style="transform: translateY(${targetY}em);"><span class="digit-slot-num">0</span><span class="digit-slot-num">1</span><span class="digit-slot-num">2</span><span class="digit-slot-num">3</span><span class="digit-slot-num">4</span><span class="digit-slot-num">5</span><span class="digit-slot-num">6</span><span class="digit-slot-num">7</span><span class="digit-slot-num">8</span><span class="digit-slot-num">9</span></span></span>`;
-            }).join('');
 
-            this.dom.heroAmount.innerHTML = `<span class="amount-symbol">${symbol}</span><span class="amount-int">${formattedInt}</span><span class="amount-dot">.</span><span class="amount-dec-roller">${rollerHtml}</span>`;
+            // 檢查現有結構是否已為 4 位數老虎機滾輪
+            let rollerContainer = this.dom.heroAmount.querySelector('.amount-dec-roller');
+            let intSpan = this.dom.heroAmount.querySelector('.amount-int');
+            let symbolSpan = this.dom.heroAmount.querySelector('.amount-symbol');
+            const strips = rollerContainer ? rollerContainer.querySelectorAll('.digit-slot-strip') : null;
+
+            if (!rollerContainer || !intSpan || !strips || strips.length !== 4) {
+                // 首次建立老虎機結構 (僅在模式切換或初次載入時執行一次)
+                const rollerHtml = decPart.split('').map((digit, idx) => {
+                    const targetY = -Number(digit) * 1.15; // 每個數字高度 1.15em
+                    const isFast = idx >= 2 ? 'fast-rolling' : '';
+                    return `<span class="digit-slot ${isFast}"><span class="digit-slot-strip" style="transform: translateY(${targetY}em);"><span class="digit-slot-num">0</span><span class="digit-slot-num">1</span><span class="digit-slot-num">2</span><span class="digit-slot-num">3</span><span class="digit-slot-num">4</span><span class="digit-slot-num">5</span><span class="digit-slot-num">6</span><span class="digit-slot-num">7</span><span class="digit-slot-num">8</span><span class="digit-slot-num">9</span></span></span>`;
+                }).join('');
+
+                this.dom.heroAmount.innerHTML = `<span class="amount-symbol">${symbol}</span><span class="amount-int">${formattedInt}</span><span class="amount-dot">.</span><span class="amount-dec-roller">${rollerHtml}</span>`;
+            } else {
+                // 核心關鍵優化：節點複用，絕不在 33ms 計時器中頻繁銷毀與重建 DOM 節點！
+                // 徹底避免因 innerHTML 重建導致使用者的點擊 (click) 事件在 MouseDown/Up 期間被瀏覽器判定中斷而遺失！
+                if (symbolSpan.textContent !== symbol) symbolSpan.textContent = symbol;
+                if (intSpan.textContent !== formattedInt) intSpan.textContent = formattedInt;
+
+                const digitsArray = decPart.split('');
+                for (let i = 0; i < 4 && i < digitsArray.length; i++) {
+                    const targetY = -Number(digitsArray[i]) * 1.15;
+                    strips[i].style.transform = `translateY(${targetY}em)`;
+                }
+            }
         } else {
             this.dom.heroAmount.classList.remove('is-rolling');
-            this.dom.heroAmount.innerHTML = `<span class="amount-symbol">${symbol}</span><span class="amount-int">${formattedInt}</span><span class="amount-dot">.</span><span>${decPart}</span>`;
+            let intSpan = this.dom.heroAmount.querySelector('.amount-int');
+            let decSpan = this.dom.heroAmount.querySelector('.amount-dec');
+            let symbolSpan = this.dom.heroAmount.querySelector('.amount-symbol');
+
+            if (!decSpan || !intSpan) {
+                this.dom.heroAmount.innerHTML = `<span class="amount-symbol">${symbol}</span><span class="amount-int">${formattedInt}</span><span class="amount-dot">.</span><span class="amount-dec">${decPart}</span>`;
+            } else {
+                if (symbolSpan.textContent !== symbol) symbolSpan.textContent = symbol;
+                if (intSpan.textContent !== formattedInt) intSpan.textContent = formattedInt;
+                if (decSpan.textContent !== decPart) decSpan.textContent = decPart;
+            }
         }
 
         const formattedHeroAmount = `${symbol} ${formattedInt}.${decPart}`;
