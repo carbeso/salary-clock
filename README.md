@@ -10,10 +10,10 @@
 
 ## 💡 專案緣起與鳴謝 (Credits)
 
-本專案的核心構想參考自社群同好優秀的「即時薪水計時器 / 薪資時鐘」概念。因深感在漫長工作日中看著微小進度跳動能帶來極大心理慰藉，特此以現代化 Web 技術與更嚴謹的工時演算法重構此版本：
+本專案的核心構想源自社群同好的交流與啟發。因深感在漫長工作日中看著微小進度跳動能帶來極大心理慰藉，特此致謝：
 
-- **原始概念討論串**：感謝 [@termcavetw 在 Threads 上的發想討論](https://www.threads.com/@termcavetw/post/DcyMmfQDzqw)
-- **參考程式概念**：感謝 [@duratgw0413 在 Threads 上的程式實作概念分享](https://www.threads.com/@duratgw0413/post/Dc2-zrRGMUX)
+- **概念發起人**：感謝 [@duratgw0413 在 Threads 上的概念發起與程式實作分享](https://www.threads.com/@duratgw0413/post/Dc2-zrRGMUX)
+- **討論串發起人**：感謝 [@termcavetw 發起的 Threads 討論串交流](https://www.threads.com/@termcavetw/post/DcyMmfQDzqw)
 
 本版本在此基礎上進一步重構與功能延伸：
 - 升級為 **Document Picture-in-Picture API**，不需安裝第三方軟體即可在 Windows 桌面置頂懸浮。

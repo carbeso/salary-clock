@@ -3,7 +3,12 @@
    強化防窺模糊保護、三合一進度條、多元指標激勵卡片、防橫條設定面板
    ========================================================================== */
 
+html {
+    color-scheme: dark;
+}
+
 :root {
+    color-scheme: dark;
     --bg-main: #0c0f17;
     --bg-card: rgba(23, 27, 40, 0.75);
     --bg-card-hover: rgba(32, 38, 57, 0.85);
@@ -742,12 +747,41 @@ body {
     color: var(--text-primary);
     font-size: 0.92rem;
     outline: none;
-    transition: border-color 0.2s ease;
+    transition: border-color 0.2s ease, background-color 0.2s ease;
     box-sizing: border-box;
+    color-scheme: dark; /* 強制瀏覽器原生控制項（包含下拉選單彈窗）採用深色主題 */
 }
 
 .form-control:focus {
     border-color: var(--accent-indigo);
+}
+
+/* 下拉選單專屬深色樣式與高對比文字，徹底解決 Windows/Chrome 原生白底白字問題 */
+select.form-control {
+    background-color: #1e2536 !important;
+    color: #ffffff !important;
+    color-scheme: dark !important;
+    border: 1px solid rgba(255, 255, 255, 0.15) !important;
+    cursor: pointer;
+}
+
+select.form-control:focus {
+    background-color: #242d42 !important;
+    border-color: var(--accent-indigo) !important;
+}
+
+select.form-control option,
+select.form-control optgroup {
+    background-color: #161b26 !important;
+    color: #ffffff !important;
+    padding: 10px 12px;
+}
+
+select.form-control option:hover,
+select.form-control option:checked,
+select.form-control option:focus {
+    background-color: #312e81 !important;
+    color: #ffffff !important;
 }
 
 .checkbox-label {
