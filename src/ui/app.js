@@ -9,7 +9,8 @@ import {
     formatCurrency,
     formatDurationChinese,
     formatStopwatch,
-    formatPercentage
+    formatPercentage,
+    escapeHTML
 } from '../utils/formatters.js';
 import { BossKeyController } from './boss-key.js';
 import { PiPController } from './pip-controller.js';
@@ -184,6 +185,16 @@ class SalaryClockApp {
                 this.closeSettings();
             }
         });
+
+        // 監聽鍵盤 Escape 鍵：若偏好設定抽屜開啟中，按 Escape 關閉抽屜（防範快捷鍵衝突）
+        // 使用 capture 捕獲階段優先攔截，並呼叫 stopImmediatePropagation 防止傳遞至老闆鍵監聽器
+        window.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && this.isSettingsOpen()) {
+                e.preventDefault();
+                e.stopImmediatePropagation();
+                this.closeSettings();
+            }
+        }, true);
 
         // 儲存與重設設定
         this.dom.btnSaveSettings.addEventListener('click', () => this.saveSettingsFromForm());
@@ -365,13 +376,46 @@ class SalaryClockApp {
 
             if (!rollerContainer || !intSpan || !strips || strips.length !== 4) {
                 // 首次建立老虎機結構 (僅在模式切換或初次載入時執行一次)
-                const rollerHtml = decPart.split('').map((digit, idx) => {
+                // 安全防護：使用 DOM 節點建立與 textContent 賦值，徹底根除 innerHTML 拼接未過濾 symbol 的 XSS 隱患
+                this.dom.heroAmount.replaceChildren();
+
+                const symbolSpanEl = document.createElement('span');
+                symbolSpanEl.className = 'amount-symbol';
+                symbolSpanEl.textContent = symbol;
+
+                const intSpanEl = document.createElement('span');
+                intSpanEl.className = 'amount-int';
+                intSpanEl.textContent = formattedInt;
+
+                const dotSpanEl = document.createElement('span');
+                dotSpanEl.className = 'amount-dot';
+                dotSpanEl.textContent = '.';
+
+                const rollerContainerEl = document.createElement('span');
+                rollerContainerEl.className = 'amount-dec-roller';
+
+                decPart.split('').forEach((digit, idx) => {
                     const targetY = -Number(digit) * 1.15; // 每個數字高度 1.15em
                     const isFast = idx >= 2 ? 'fast-rolling' : '';
-                    return `<span class="digit-slot ${isFast}"><span class="digit-slot-strip" style="transform: translateY(${targetY}em);"><span class="digit-slot-num">0</span><span class="digit-slot-num">1</span><span class="digit-slot-num">2</span><span class="digit-slot-num">3</span><span class="digit-slot-num">4</span><span class="digit-slot-num">5</span><span class="digit-slot-num">6</span><span class="digit-slot-num">7</span><span class="digit-slot-num">8</span><span class="digit-slot-num">9</span></span></span>`;
-                }).join('');
+                    const slot = document.createElement('span');
+                    slot.className = `digit-slot ${isFast}`.trim();
 
-                this.dom.heroAmount.innerHTML = `<span class="amount-symbol">${symbol}</span><span class="amount-int">${formattedInt}</span><span class="amount-dot">.</span><span class="amount-dec-roller">${rollerHtml}</span>`;
+                    const strip = document.createElement('span');
+                    strip.className = 'digit-slot-strip';
+                    strip.style.transform = `translateY(${targetY}em)`;
+
+                    for (let d = 0; d <= 9; d++) {
+                        const num = document.createElement('span');
+                        num.className = 'digit-slot-num';
+                        num.textContent = String(d);
+                        strip.appendChild(num);
+                    }
+
+                    slot.appendChild(strip);
+                    rollerContainerEl.appendChild(slot);
+                });
+
+                this.dom.heroAmount.append(symbolSpanEl, intSpanEl, dotSpanEl, rollerContainerEl);
             } else {
                 // 核心關鍵優化：節點複用，絕不在 33ms 計時器中頻繁銷毀與重建 DOM 節點！
                 // 徹底避免因 innerHTML 重建導致使用者的點擊 (click) 事件在 MouseDown/Up 期間被瀏覽器判定中斷而遺失！
@@ -391,7 +435,26 @@ class SalaryClockApp {
             let symbolSpan = this.dom.heroAmount.querySelector('.amount-symbol');
 
             if (!decSpan || !intSpan) {
-                this.dom.heroAmount.innerHTML = `<span class="amount-symbol">${symbol}</span><span class="amount-int">${formattedInt}</span><span class="amount-dot">.</span><span class="amount-dec">${decPart}</span>`;
+                // 安全防護：採用安全 DOM 節點建立與 textContent，消除 innerHTML XSS 隱患
+                this.dom.heroAmount.replaceChildren();
+
+                const symbolSpanEl = document.createElement('span');
+                symbolSpanEl.className = 'amount-symbol';
+                symbolSpanEl.textContent = symbol;
+
+                const intSpanEl = document.createElement('span');
+                intSpanEl.className = 'amount-int';
+                intSpanEl.textContent = formattedInt;
+
+                const dotSpanEl = document.createElement('span');
+                dotSpanEl.className = 'amount-dot';
+                dotSpanEl.textContent = '.';
+
+                const decSpanEl = document.createElement('span');
+                decSpanEl.className = 'amount-dec';
+                decSpanEl.textContent = decPart;
+
+                this.dom.heroAmount.append(symbolSpanEl, intSpanEl, dotSpanEl, decSpanEl);
             } else {
                 if (symbolSpan.textContent !== symbol) symbolSpan.textContent = symbol;
                 if (intSpan.textContent !== formattedInt) intSpan.textContent = formattedInt;
@@ -401,11 +464,26 @@ class SalaryClockApp {
 
         const formattedHeroAmount = `${symbol} ${formattedInt}.${decPart}`;
 
-        // 英雄卡左上方標籤：帶圖示與「本日累積 / 本週累積 / 本月累積」，與下方卡片完全一致
+        // 英雄卡左上方標籤：帶圖示與「本日累積 / 本週累積 / 本月累積」，採節點複用與安全文字節點
         let periodIcon = '☀️';
         if (this.activeView === 'week') periodIcon = '📅';
         if (this.activeView === 'month') periodIcon = '🗓️';
-        this.dom.amountLabel.innerHTML = `<span>${periodIcon}</span> <span>${periodName}累積</span>`;
+
+        let iconSpan = this.dom.amountLabel.querySelector('.amount-label-icon');
+        let textSpan = this.dom.amountLabel.querySelector('.amount-label-text');
+
+        if (!iconSpan || !textSpan) {
+            this.dom.amountLabel.replaceChildren();
+            iconSpan = document.createElement('span');
+            iconSpan.className = 'amount-label-icon';
+            textSpan = document.createElement('span');
+            textSpan.className = 'amount-label-text';
+            this.dom.amountLabel.append(iconSpan, textSpan);
+        }
+
+        if (iconSpan.textContent !== periodIcon) iconSpan.textContent = periodIcon;
+        const periodText = ` ${periodName}累積`;
+        if (textSpan.textContent !== periodText) textSpan.textContent = periodText;
 
         // 2. 狀態徽章
         this.dom.statusText.textContent = result.statusText;
@@ -770,9 +848,19 @@ class SalaryClockApp {
     }
 
     /**
+     * 檢查設定抽屜是否開啟
+     * @returns {boolean}
+     */
+    isSettingsOpen() {
+        return this.dom.drawerBackdrop.classList.contains('active');
+    }
+
+    /**
      * 開啟設定抽屜
      */
     openSettings() {
+        // 設定抽屜開啟期間暫停老闆鍵快捷鍵，防範按下 Escape 關閉抽屜時產生快捷鍵衝突
+        this.bossKey.pause();
         this.syncSettingsForm();
         this.dom.drawerBackdrop.classList.add('active');
     }
@@ -782,6 +870,11 @@ class SalaryClockApp {
      */
     closeSettings() {
         this.dom.drawerBackdrop.classList.remove('active');
+        // 使用 setTimeout (0ms) 確保當前按鍵事件週期（如 Escape 按鍵）完全結束後再恢復老闆鍵響應，
+        // 徹底消除事件冒泡與監聽器順序造成的快捷鍵誤觸衝突
+        setTimeout(() => {
+            this.bossKey.resume();
+        }, 0);
     }
 
     /**
@@ -792,6 +885,9 @@ class SalaryClockApp {
         this.config.monthlySalary = Math.max(0, Number(this.dom.cfgMonthlySalary.value) || 0);
         this.config.hourlyRate = Math.max(0, Number(this.dom.cfgHourlyRate.value) || 0);
         this.config.rewardType = this.dom.cfgRewardType.value;
+        // 輸入欄位安全防護說明：
+        // 畫面呈現端已全數改採 DOM textContent 安全文字節點渲染，徹底杜絕 innerHTML XSS 漏洞；
+        // 儲存層保留原始純文字，避免預先進行 HTML Entity 編碼導致「雙重跳脫」(如 & 變 &amp; 再變 &amp;amp;)
         this.config.rewardCustomName = this.dom.cfgCustomName.value.trim() || '自訂目標';
         this.config.rewardCustomPrice = Math.max(1, Number(this.dom.cfgCustomPrice.value) || 100);
         this.config.rewardCustomUnit = this.dom.cfgCustomUnit.value.trim() || '個';
