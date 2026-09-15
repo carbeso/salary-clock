@@ -128,8 +128,8 @@ export class BossKeyController {
                 return;
             }
 
-            // 若目前處於全螢幕展示狀態，使用者按 Escape 優先由瀏覽器退出全螢幕，不誤觸老闆鍵
-            if (typeof document !== 'undefined' && document.fullscreenElement && e.key === 'Escape') {
+            // 若目前處於全螢幕展示狀態（包含原生全螢幕或全螢幕時鐘模式），使用者按 Escape 優先退出全螢幕，不誤觸老闆鍵
+            if (typeof document !== 'undefined' && (document.fullscreenElement || document.body?.classList.contains('is-landscape-clock')) && e.key === 'Escape') {
                 return;
             }
 

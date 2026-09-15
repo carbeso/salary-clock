@@ -121,7 +121,7 @@
         <!-- 3. 下方三維度卡片：本日、本週、本月（點擊切換上方英雄卡展示） -->
         <section class="period-stats-grid">
             <!-- 卡片 1：本日累積 -->
-            <div class="stat-card clickable-card active" id="card-period-today" title="點擊切換上方展示本日累積">
+            <div class="stat-card clickable-card active" id="card-period-today" role="button" tabindex="0" aria-pressed="true" title="點擊切換上方展示本日累積 (或按 Enter / 空白鍵)">
                 <div class="stat-card-header">
                     <span class="stat-card-title"><span>☀️</span> 本日累積</span>
                     <span class="view-indicator" id="ind-today">● 聚焦中</span>
@@ -139,7 +139,7 @@
             </div>
 
             <!-- 卡片 2：本週累積 -->
-            <div class="stat-card clickable-card" id="card-period-week" title="點擊切換上方展示本週累積">
+            <div class="stat-card clickable-card" id="card-period-week" role="button" tabindex="0" aria-pressed="false" title="點擊切換上方展示本週累積 (或按 Enter / 空白鍵)">
                 <div class="stat-card-header">
                     <span class="stat-card-title"><span>📅</span> 本週累積</span>
                     <span class="view-indicator" id="ind-week" style="display: none;">● 聚焦中</span>
@@ -157,7 +157,7 @@
             </div>
 
             <!-- 卡片 3：本月累積 -->
-            <div class="stat-card clickable-card" id="card-period-month" title="點擊切換上方展示本月累積">
+            <div class="stat-card clickable-card" id="card-period-month" role="button" tabindex="0" aria-pressed="false" title="點擊切換上方展示本月累積 (或按 Enter / 空白鍵)">
                 <div class="stat-card-header">
                     <span class="stat-card-title"><span>🗓️</span> 本月累積</span>
                     <span class="view-indicator" id="ind-month" style="display: none;">● 聚焦中</span>
@@ -196,12 +196,12 @@
         <p>🕒 薪資時鐘 (Salary Clock) · 歡迎前往 <a href="https://github.com/carbeso/salary-clock" target="_blank" rel="noopener noreferrer">GitHub (carbeso/salary-clock)</a> 自由 Fork 與修改</p>
     </footer>
 
-    <!-- 設定抽屜 (Settings Drawer) - 單欄自適應防橫條排版 -->
+    <!-- 設定抽屜 (Settings Drawer) - 單欄自適應防橫條排版，支援 ARIA 無障礙與焦點陷阱 -->
     <div class="drawer-backdrop" id="drawer-backdrop">
-        <div class="drawer">
+        <div class="drawer" role="dialog" aria-modal="true" aria-labelledby="drawer-title">
             <div class="drawer-header">
-                <h2 class="drawer-title">⚙️ 偏好設定</h2>
-                <button class="drawer-close" id="btn-drawer-close">&times;</button>
+                <h2 class="drawer-title" id="drawer-title">⚙️ 偏好設定</h2>
+                <button class="drawer-close" id="btn-drawer-close" aria-label="關閉偏好設定">&times;</button>
             </div>
 
             <div class="drawer-body">

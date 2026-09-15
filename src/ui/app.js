@@ -155,6 +155,12 @@ class SalaryClockApp {
         // 英雄卡滾動數字 DOM 結構快取（徹底消除 33ms 每幀 querySelector 走訪開銷）
         this.cachedHeroAmount = null;
 
+        // 螢幕防休眠喚醒鎖定 (Screen Wake Lock API) 實例快取
+        this.wakeLock = null;
+
+        // 無障礙焦點管理：記錄開啟抽屜前聚焦之 DOM 元素以利關閉時還原焦點
+        this.previousActiveElement = null;
+
         this.init();
     }
 
@@ -168,9 +174,10 @@ class SalaryClockApp {
         this.updateModeUI();
         this.bossKey.setMode(this.config.bossKeyDisguise || 'mask');
 
-        // 檢查初始螢幕方向（若進入時就已是手機橫向則套用時鐘樣式）
+        // 檢查初始螢幕方向（若進入時就已是手機橫向則套用時鐘樣式並嘗試請求防休眠）
         if (this.isLandscapeOrientation()) {
             document.body.classList.add('is-landscape-clock');
+            this.requestWakeLock();
         }
 
         // 啟動每秒 10 次的平滑刷新迴圈 (100ms)
@@ -190,13 +197,23 @@ class SalaryClockApp {
             }
         });
 
-        // 監聽鍵盤 Escape 鍵：若偏好設定抽屜開啟中，按 Escape 關閉抽屜（防範快捷鍵衝突）
-        // 使用 capture 捕獲階段優先攔截，並呼叫 stopImmediatePropagation 防止傳遞至老闆鍵監聽器
+        // 監聽全域鍵盤事件：在 capture 捕獲階段優先處理抽屜 Escape/Tab 以及全螢幕時鐘 Escape
         window.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape' && this.isSettingsOpen()) {
-                e.preventDefault();
-                e.stopImmediatePropagation();
-                this.closeSettings();
+            if (e.key === 'Escape') {
+                if (this.isSettingsOpen()) {
+                    // 抽屜開啟時按 Escape 優先關閉抽屜，阻止向後冒泡避免觸發老闆鍵
+                    e.preventDefault();
+                    e.stopImmediatePropagation();
+                    this.closeSettings();
+                } else if (document.body.classList.contains('is-landscape-clock')) {
+                    // 全螢幕時鐘模式下按 Escape 優先退出時鐘模式
+                    e.preventDefault();
+                    e.stopImmediatePropagation();
+                    this.exitFullscreenClock();
+                }
+            } else if (e.key === 'Tab' && this.isSettingsOpen()) {
+                // 抽屜開啟期間 Tab / Shift+Tab 嚴格侷限於抽屜內部（無障礙焦點陷阱）
+                this.handleDrawerKeydown(e);
             }
         }, true);
 
@@ -226,7 +243,8 @@ class SalaryClockApp {
         // 桌面懸浮視窗 (PiP) 或 手機全螢幕時鐘按鈕事件
         if (this.dom.btnPip) {
             this.dom.btnPip.addEventListener('click', () => {
-                if (this.isMobileDevice() || !this.pipController.isSupported()) {
+                const isMobileOrSmall = this.isMobileDevice() || (typeof window !== 'undefined' && window.innerWidth <= 640);
+                if (isMobileOrSmall || !this.pipController.isSupported()) {
                     this.toggleFullscreenClock();
                 } else {
                     this.togglePiP();
@@ -245,43 +263,69 @@ class SalaryClockApp {
             this.dom.btnLandscapeSettings.addEventListener('click', () => this.openSettings());
         }
 
-        // 監聽全螢幕狀態切換事件（含使用者按下 Esc 鍵退出）
-        document.addEventListener('fullscreenchange', () => {
+        // 監聽全螢幕狀態切換事件（含使用者按下 Esc 鍵退出）：同步管理螢幕防休眠鎖定 (Wake Lock)
+        document.addEventListener('fullscreenchange', async () => {
             const isFull = !!document.fullscreenElement;
             if (isFull) {
                 document.body.classList.add('is-landscape-clock');
-            } else if (!this.isLandscapeOrientation()) {
-                document.body.classList.remove('is-landscape-clock');
+                await this.requestWakeLock();
+            } else {
+                if (!this.isLandscapeOrientation()) {
+                    document.body.classList.remove('is-landscape-clock');
+                }
+                await this.releaseWakeLock();
             }
         });
 
-        // 監聽手機螢幕轉向與視窗縮放
-        const handleOrientationChange = () => {
+        // 監聽手機螢幕轉向與視窗縮放：自適應更新懸浮按鈕形態與橫放時鐘防休眠狀態
+        const handleOrientationAndResize = () => {
+            this.setupDeviceSpecificFeatures();
             if (this.isLandscapeOrientation()) {
                 document.body.classList.add('is-landscape-clock');
+                this.requestWakeLock();
             } else if (!document.fullscreenElement) {
                 document.body.classList.remove('is-landscape-clock');
+                this.releaseWakeLock();
             }
         };
 
-        window.addEventListener('resize', handleOrientationChange);
-        if (screen.orientation) {
-            screen.orientation.addEventListener('change', handleOrientationChange);
+        window.addEventListener('resize', handleOrientationAndResize);
+        if (typeof screen !== 'undefined' && screen.orientation) {
+            screen.orientation.addEventListener('change', handleOrientationAndResize);
         }
 
         // 自由接案碼錶按鈕
         this.dom.btnFreelanceToggle.addEventListener('click', () => this.toggleFreelanceTimer());
         this.dom.btnFreelanceReset.addEventListener('click', () => this.resetFreelanceTimer());
 
-        // 點擊切換維度 (本日 / 本週 / 本月)
+        // 鍵盤導覽與無障礙操作：支援鍵盤 Enter 與 Space 鍵切換維度 (本日 / 本週 / 本月)
+        const setupCardKeyboard = (cardEl, view) => {
+            if (!cardEl) return;
+            cardEl.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' || e.key === ' ' || e.key === 'Spacebar') {
+                    e.preventDefault(); // 防止空白鍵捲動頁面
+                    this.setActiveView(view);
+                }
+            });
+        };
+
+        // 點擊與鍵盤切換維度 (本日 / 本週 / 本月)
         if (this.dom.cardPeriodToday) {
             this.dom.cardPeriodToday.addEventListener('click', () => this.setActiveView('today'));
+            setupCardKeyboard(this.dom.cardPeriodToday, 'today');
         }
         if (this.dom.cardPeriodWeek) {
             this.dom.cardPeriodWeek.addEventListener('click', () => this.setActiveView('week'));
+            setupCardKeyboard(this.dom.cardPeriodWeek, 'week');
         }
         if (this.dom.cardPeriodMonth) {
             this.dom.cardPeriodMonth.addEventListener('click', () => this.setActiveView('month'));
+            setupCardKeyboard(this.dom.cardPeriodMonth, 'month');
+        }
+
+        // 偏好設定抽屜內無障礙焦點陷阱 (Focus Trap)
+        if (this.dom.drawerBackdrop) {
+            this.dom.drawerBackdrop.addEventListener('keydown', (e) => this.handleDrawerKeydown(e));
         }
 
         // 頁面可見性變化 (Page Visibility API)：背景省電降頻與切回前景即時補算
@@ -293,15 +337,25 @@ class SalaryClockApp {
 
     /**
      * 設定當前聚焦的時間維度 ('today' | 'week' | 'month')
+     * 同步更新視覺選取狀態與 ARIA 無障礙屬性 (aria-pressed)
      * @param {'today'|'week'|'month'} view 
      */
     setActiveView(view) {
         if (this.activeView === view) return;
         this.activeView = view;
 
-        if (this.dom.cardPeriodToday) this.dom.cardPeriodToday.classList.toggle('active', view === 'today');
-        if (this.dom.cardPeriodWeek) this.dom.cardPeriodWeek.classList.toggle('active', view === 'week');
-        if (this.dom.cardPeriodMonth) this.dom.cardPeriodMonth.classList.toggle('active', view === 'month');
+        if (this.dom.cardPeriodToday) {
+            this.dom.cardPeriodToday.classList.toggle('active', view === 'today');
+            this.dom.cardPeriodToday.setAttribute('aria-pressed', String(view === 'today'));
+        }
+        if (this.dom.cardPeriodWeek) {
+            this.dom.cardPeriodWeek.classList.toggle('active', view === 'week');
+            this.dom.cardPeriodWeek.setAttribute('aria-pressed', String(view === 'week'));
+        }
+        if (this.dom.cardPeriodMonth) {
+            this.dom.cardPeriodMonth.classList.toggle('active', view === 'month');
+            this.dom.cardPeriodMonth.setAttribute('aria-pressed', String(view === 'month'));
+        }
 
         if (this.dom.indToday) this.dom.indToday.style.display = view === 'today' ? 'inline-block' : 'none';
         if (this.dom.indWeek) this.dom.indWeek.style.display = view === 'week' ? 'inline-block' : 'none';
@@ -400,6 +454,8 @@ class SalaryClockApp {
 
                 const rollerContainerEl = document.createElement('span');
                 rollerContainerEl.className = 'amount-dec-roller';
+                // 無障礙體驗防護：滾筒容器標記 aria-hidden="true"，避免螢幕報讀工具連續唸出 40 個數字 span 造成困擾
+                rollerContainerEl.setAttribute('aria-hidden', 'true');
 
                 const strips = [];
                 decPart.split('').forEach((digit, idx) => {
@@ -486,6 +542,14 @@ class SalaryClockApp {
         }
 
         const formattedHeroAmount = `${symbol} ${formattedInt}.${decPart}`;
+
+        // 無障礙體驗防護：為英雄金額卡片提供完整的 aria-label，使螢幕報讀工具可正確朗讀出數值
+        // 防窺隱私保護：若處於防窺保護狀態，隱藏具體薪資金額，避免螢幕報讀工具在辦公室場合洩漏薪資
+        const isDisguised = Boolean(this.bossKey && this.bossKey.isDisguised);
+        const heroAriaLabel = isDisguised ? '已啟用防窺保護' : formattedHeroAmount;
+        if (this.dom.heroAmount && this.dom.heroAmount.getAttribute('aria-label') !== heroAriaLabel) {
+            this.dom.heroAmount.setAttribute('aria-label', heroAriaLabel);
+        }
 
         // 針對 33ms 高頻跳動的進度條，動態切換 .no-transition 類別（髒檢查比對，避免每幀重複 toggle）
         const isHighFreq = decimals === 4;
@@ -594,6 +658,12 @@ class SalaryClockApp {
             const rewardNameStr = `${reward.name} 指標`;
             if (this.dom.rewardName.textContent !== rewardNameStr) {
                 this.dom.rewardName.textContent = rewardNameStr;
+            }
+
+            // 激勵指標副標題同步更新：隨選取維度動態切換（「今日/本週/本月累積進帳換算」，不再死鎖為今日）
+            const rewardSubtextStr = `${periodName}累積進帳換算`;
+            if (this.dom.rewardSubtext && this.dom.rewardSubtext.textContent !== rewardSubtextStr) {
+                this.dom.rewardSubtext.textContent = rewardSubtextStr;
             }
             // 依據目前聚焦維度的累積金額進行無條件捨去
             const rewardCount = reward.price > 0 ? (targetAmount / reward.price) : 0;
@@ -711,10 +781,17 @@ class SalaryClockApp {
             document.body.classList.add('is-disguised');
             this.dom.bossKeyIcon.textContent = '👁️';
             this.dom.btnBossKey.classList.add('btn-primary');
+            if (this.dom.heroAmount) {
+                this.dom.heroAmount.setAttribute('aria-label', '已啟用防窺保護');
+            }
         } else {
             document.body.classList.remove('is-disguised');
             this.dom.bossKeyIcon.textContent = '🕶️';
             this.dom.btnBossKey.classList.remove('btn-primary');
+            // 解除防窺後立即觸發一次即時計算補齊正確 aria-label
+            const now = new Date();
+            const result = calculateSalary(this.config, now);
+            this.render(result, now);
         }
     }
 
@@ -746,20 +823,70 @@ class SalaryClockApp {
      * 依據設備種類（桌機 vs 行動裝置）配置專屬功能按鈕
      */
     setupDeviceSpecificFeatures() {
-        const isMobile = this.isMobileDevice();
-        if (isMobile) {
-            // 行動裝置：將原桌面懸浮按鈕無縫升級為「全螢幕時鐘」
+        const isMobileOrSmall = this.isMobileDevice() || (typeof window !== 'undefined' && window.innerWidth <= 640);
+        if (isMobileOrSmall || !this.pipController.isSupported()) {
+            // 行動裝置或小螢幕（或瀏覽器未支援 Document PiP）：將按鈕自適應升級為「全螢幕時鐘」
             if (this.dom.btnPip) {
                 this.dom.btnPip.setAttribute('title', '切換為全螢幕大計時鐘模式 (適合橫放桌面展示)');
                 if (this.dom.pipBtnIcon) this.dom.pipBtnIcon.textContent = '⏱️';
                 if (this.dom.pipBtnText) this.dom.pipBtnText.textContent = ' 全螢幕';
             }
         } else {
-            // 桌機：檢查是否支援 Document PiP，若不支援則降級為全螢幕時鐘
-            if (!this.pipController.isSupported() && this.dom.btnPip) {
-                this.dom.btnPip.setAttribute('title', '瀏覽器未支援置頂懸浮，改為全螢幕時鐘模式');
-                if (this.dom.pipBtnIcon) this.dom.pipBtnIcon.textContent = '⏱️';
-                if (this.dom.pipBtnText) this.dom.pipBtnText.textContent = ' 全螢幕';
+            // 支援桌面置頂畫中畫的桌機環境：維持「桌面懸浮」按鈕
+            if (this.dom.btnPip) {
+                this.dom.btnPip.setAttribute('title', '彈出永遠置頂桌面懸浮小視窗 (支援 Chrome / Edge)');
+                if (this.dom.pipBtnIcon) this.dom.pipBtnIcon.textContent = '📌';
+                if (this.dom.pipBtnText) this.dom.pipBtnText.textContent = ' 桌面懸浮';
+            }
+        }
+    }
+
+    /**
+     * 請求螢幕防休眠鎖定 (Screen Wake Lock API)
+     * 進入全螢幕時防止手機桌面展示時螢幕自動暗化或休眠關閉
+     */
+    async requestWakeLock() {
+        if (typeof navigator === 'undefined' || !('wakeLock' in navigator)) {
+            return;
+        }
+        if (this.wakeLock || this._isRequestingWakeLock) {
+            return;
+        }
+
+        this._isRequestingWakeLock = true;
+        try {
+            const sentinel = await navigator.wakeLock.request('screen');
+            // 競態防禦：若在非同步等待取得期間使用者已退出全螢幕，立即釋放鎖定以防孤立殘留
+            if (typeof document !== 'undefined' && !document.fullscreenElement && !document.body?.classList.contains('is-landscape-clock')) {
+                await sentinel.release();
+                this.wakeLock = null;
+            } else {
+                this.wakeLock = sentinel;
+                this.wakeLock.addEventListener('release', () => {
+                    if (this.wakeLock === sentinel) {
+                        this.wakeLock = null;
+                    }
+                });
+            }
+        } catch (err) {
+            // 部分設備、低電量模式或未獲授權狀態下安全防護，不中斷操作流程
+            console.warn('螢幕防休眠鎖定 (Wake Lock) 取得失敗或不支援:', err);
+        } finally {
+            this._isRequestingWakeLock = false;
+        }
+    }
+
+    /**
+     * 安全釋放螢幕防休眠鎖定
+     */
+    async releaseWakeLock() {
+        if (this.wakeLock) {
+            try {
+                await this.wakeLock.release();
+            } catch (err) {
+                console.warn('螢幕防休眠鎖定 (Wake Lock) 釋放失敗:', err);
+            } finally {
+                this.wakeLock = null;
             }
         }
     }
@@ -777,6 +904,7 @@ class SalaryClockApp {
                 console.warn('Fullscreen request blocked or failed:', err);
             }
             document.body.classList.add('is-landscape-clock');
+            await this.requestWakeLock();
         } else {
             await this.exitFullscreenClock();
         }
@@ -787,6 +915,7 @@ class SalaryClockApp {
      */
     async exitFullscreenClock() {
         document.body.classList.remove('is-landscape-clock');
+        await this.releaseWakeLock();
         if (document.fullscreenElement) {
             try {
                 if (document.exitFullscreen) {
@@ -839,6 +968,10 @@ class SalaryClockApp {
         } else {
             // 切回前景：立即恢復正常計時迴圈，並立即重算補齊畫面數值
             this.startTickLoop();
+            // 若切回前景時仍處於全螢幕狀態，重新嘗試請求防休眠鎖定
+            if (document.fullscreenElement || document.body.classList.contains('is-landscape-clock')) {
+                this.requestWakeLock();
+            }
         }
     }
 
@@ -1021,22 +1154,80 @@ class SalaryClockApp {
      * 開啟設定抽屜
      */
     openSettings() {
+        if (this.isSettingsOpen()) return;
+
+        // 無障礙焦點管理：記錄開啟前之焦點元素，以便關閉時焦點能原路還原 (WCAG 2.1)
+        this.previousActiveElement = (typeof document !== 'undefined') ? document.activeElement : null;
+
         // 設定抽屜開啟期間暫停老闆鍵快捷鍵，防範按下 Escape 關閉抽屜時產生快捷鍵衝突
         this.bossKey.pause();
         this.syncSettingsForm();
         this.dom.drawerBackdrop.classList.add('active');
+
+        // 無障礙焦點指引：抽屜展開後自動將鍵盤焦點引導至關閉按鈕
+        if (this.dom.btnDrawerClose && typeof this.dom.btnDrawerClose.focus === 'function') {
+            this.dom.btnDrawerClose.focus();
+        }
     }
 
     /**
      * 關閉設定抽屜
      */
     closeSettings() {
+        if (!this.isSettingsOpen()) return;
+
         this.dom.drawerBackdrop.classList.remove('active');
+
+        // 無障礙焦點還原：若先前有記錄焦點元素，將焦點安全平移還原回去
+        if (this.previousActiveElement && typeof this.previousActiveElement.focus === 'function' && (typeof document === 'undefined' || document.body.contains(this.previousActiveElement))) {
+            this.previousActiveElement.focus();
+            this.previousActiveElement = null;
+        }
+
         // 使用 setTimeout (0ms) 確保當前按鍵事件週期（如 Escape 按鍵）完全結束後再恢復老闆鍵響應，
         // 徹底消除事件冒泡與監聽器順序造成的快捷鍵誤觸衝突
         setTimeout(() => {
             this.bossKey.resume();
         }, 0);
+    }
+
+    /**
+     * 偏好設定抽屜內鍵盤導覽事件處理（無障礙焦點陷阱 Focus Trap）
+     * 確保使用者以 Tab / Shift+Tab 鍵導覽時，焦點永遠循環在抽屜內部不可跳出
+     * @param {KeyboardEvent} e
+     */
+    handleDrawerKeydown(e) {
+        if (e.key !== 'Tab') return;
+
+        const drawerEl = this.dom.drawerBackdrop?.querySelector('.drawer');
+        if (!drawerEl) return;
+
+        // 搜尋抽屜內所有可聚焦元素
+        const focusableElements = Array.from(drawerEl.querySelectorAll(
+            'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+        )).filter(el => {
+            // 排除被 display:none 隱藏之項目
+            return el.offsetParent !== null || (el.getClientRects && el.getClientRects().length > 0);
+        });
+
+        if (focusableElements.length === 0) return;
+
+        const firstElement = focusableElements[0];
+        const lastElement = focusableElements[focusableElements.length - 1];
+
+        if (e.shiftKey) {
+            // Shift + Tab：當焦點在第一個元素或抽屜外時反向繞回最後一個元素
+            if (document.activeElement === firstElement || !drawerEl.contains(document.activeElement)) {
+                e.preventDefault();
+                lastElement.focus();
+            }
+        } else {
+            // Tab：當焦點在最後一個元素或抽屜外時順向循環回第一個元素
+            if (document.activeElement === lastElement || !drawerEl.contains(document.activeElement)) {
+                e.preventDefault();
+                firstElement.focus();
+            }
+        }
     }
 
     /**

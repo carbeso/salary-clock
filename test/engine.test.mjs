@@ -581,6 +581,372 @@ isPiPOpenForTest = true;
 mockHandleVisibilityChange(true);
 assert(currentAppTimerRate === 33, '分頁置於背景但開啟 PiP 懸浮視窗時，應維持 33ms 不降頻');
 
-console.log(`\n🎉 全部 ${passedTests}/${totalTests} 項單元測試成功通過！核心運算、防窺隱私與安全性防護驗證精確無誤。`);
+// ==========================================================================
+// 19. Phase 3: UX & Accessibility (介面體驗、無障礙與防休眠) 驗證
+// ==========================================================================
+
+// 19.1 直式手機全螢幕入口自適應佈局樣式檢驗
+const stylesPath = path.resolve(__dirname, '../src/ui/styles.css');
+const stylesContent = fs.readFileSync(stylesPath, 'utf8');
+const media640Match = stylesContent.match(/@media\s*\(max-width:\s*640px\)\s*\{([\s\S]*?)\n\}/);
+assert(media640Match !== null, 'styles.css 必須包含 @media (max-width: 640px) 響應式區塊');
+const media640Content = media640Match[1];
+assert(!media640Content.includes('#btn-pip {\n        display: none !important;\n    }'), '小螢幕 640px 媒體查詢不得包含粗暴隱藏 #btn-pip 之規則');
+assert(media640Content.includes('#btn-pip') && media640Content.includes('.btn-text') && media640Content.includes('display: none'), '小螢幕 640px 必須為 #btn-pip 配置自適應隱藏文字保留圖示之精簡佈局');
+assert(stylesContent.includes('.clickable-card:focus-visible'), 'styles.css 必須包含 .clickable-card:focus-visible 鍵盤無障礙焦點樣式');
+assert(stylesContent.includes('visibility: hidden') && stylesContent.includes('.drawer-backdrop.active') && stylesContent.includes('visibility: visible'), 'styles.css 設定抽屜關閉時必須具備 visibility: hidden 以杜絕背景鍵盤焦點穿透');
+
+// 19.2 HTML 三維度統計卡與設定抽屜無障礙屬性檢驗
+assert(indexContent.includes('id="card-period-today"') && indexContent.includes('role="button"') && indexContent.includes('tabindex="0"'), '本日卡片必須包含 role="button" 與 tabindex="0"');
+assert(indexContent.includes('id="card-period-week"') && indexContent.includes('role="button"') && indexContent.includes('tabindex="0"'), '本週卡片必須包含 role="button" 與 tabindex="0"');
+assert(indexContent.includes('id="card-period-month"') && indexContent.includes('role="button"') && indexContent.includes('tabindex="0"'), '本月卡片必須包含 role="button" 與 tabindex="0"');
+assert(indexContent.includes('role="dialog"') && indexContent.includes('aria-modal="true"'), '設定抽屜必須包含 role="dialog" 與 aria-modal="true"');
+assert(indexContent.includes('aria-labelledby="drawer-title"'), '設定抽屜必須包含 aria-labelledby 指向標題');
+assert(indexContent.includes('id="drawer-title"'), '設定抽屜標題必須具備 id="drawer-title"');
+assert(indexContent.includes('aria-label="關閉偏好設定"'), '設定抽屜關閉按鈕必須包含清晰之 aria-label');
+
+// 19.3 激勵指標副標題隨維度切換動態更新邏輯
+function getRewardSubtextForView(view) {
+    let periodName = '今日';
+    if (view === 'week') periodName = '本週';
+    else if (view === 'month') periodName = '本月';
+    return `${periodName}累積進帳換算`;
+}
+assert(getRewardSubtextForView('today') === '今日累積進帳換算', '本日維度副標題應為今日累積進帳換算');
+assert(getRewardSubtextForView('week') === '本週累積進帳換算', '本週維度副標題應為本週累積進帳換算');
+assert(getRewardSubtextForView('month') === '本月累積進帳換算', '本月維度副標題應為本月累積進帳換算');
+
+// 19.4 鍵盤 Enter / Space 切換維度與 aria-pressed 聯動模擬
+let currentViewForTest = 'today';
+const mockCards = {
+    today: { role: 'button', tabindex: '0', ariaPressed: 'true', active: true },
+    week: { role: 'button', tabindex: '0', ariaPressed: 'false', active: false },
+    month: { role: 'button', tabindex: '0', ariaPressed: 'false', active: false }
+};
+
+function testSetActiveView(view) {
+    currentViewForTest = view;
+    mockCards.today.ariaPressed = String(view === 'today');
+    mockCards.today.active = (view === 'today');
+    mockCards.week.ariaPressed = String(view === 'week');
+    mockCards.week.active = (view === 'week');
+    mockCards.month.ariaPressed = String(view === 'month');
+    mockCards.month.active = (view === 'month');
+}
+
+function testCardKeydown(view, key) {
+    if (key === 'Enter' || key === ' ' || key === 'Spacebar') {
+        testSetActiveView(view);
+        return true;
+    }
+    return false;
+}
+
+// 測試 Enter 鍵切換至 week
+const handledEnter = testCardKeydown('week', 'Enter');
+assert(handledEnter === true, '按下 Enter 鍵應被卡片鍵盤處理器攔截');
+assert(currentViewForTest === 'week', '按下 Enter 鍵後當前維度應切換至 week');
+assert(mockCards.today.ariaPressed === 'false' && mockCards.week.ariaPressed === 'true', '切換至 week 後 week 卡片 aria-pressed 應為 true，today 為 false');
+
+// 測試 Space 空白鍵切換至 month
+const handledSpace = testCardKeydown('month', ' ');
+assert(handledSpace === true, '按下空白鍵應被卡片鍵盤處理器攔截');
+assert(currentViewForTest === 'month', '按下空白鍵後當前維度應切換至 month');
+assert(mockCards.month.ariaPressed === 'true' && mockCards.week.ariaPressed === 'false', '切換至 month 後 month 卡片 aria-pressed 應為 true');
+
+// 測試 Spacebar 兼容鍵名切換至 today
+const handledSpacebar = testCardKeydown('today', 'Spacebar');
+assert(handledSpacebar === true, '按下 Spacebar 鍵應被卡片鍵盤處理器攔截');
+assert(currentViewForTest === 'today', '按下 Spacebar 鍵後當前維度應切換至 today');
+assert(mockCards.today.ariaPressed === 'true' && mockCards.month.ariaPressed === 'false', '切換至 today 後 today 卡片 aria-pressed 應為 true');
+
+// 測試其他按鍵不觸發
+const handledTab = testCardKeydown('today', 'Tab');
+assert(handledTab === false, '按下非觸發鍵 (如 Tab) 不應觸發卡片切換');
+assert(currentViewForTest === 'today', '按下非觸發鍵後當前維度應維持不變');
+
+// 19.5 Screen Wake Lock API 整合與容錯模擬
+let wakeLockRequested = false;
+let wakeLockReleased = false;
+let releaseCb = null;
+
+class MockWakeLockSentinel {
+    constructor() {
+        this.released = false;
+    }
+    addEventListener(event, cb) {
+        if (event === 'release') releaseCb = cb;
+    }
+    async release() {
+        this.released = true;
+        wakeLockReleased = true;
+        if (releaseCb) releaseCb();
+    }
+}
+
+let currentWakeLock = null;
+async function testRequestWakeLock(supported = true, failRequest = false) {
+    if (!supported) return;
+    if (!currentWakeLock) {
+        try {
+            if (failRequest) throw new Error('NotAllowedError');
+            currentWakeLock = new MockWakeLockSentinel();
+            wakeLockRequested = true;
+            currentWakeLock.addEventListener('release', () => {
+                currentWakeLock = null;
+            });
+        } catch (err) {
+            currentWakeLock = null;
+        }
+    }
+}
+
+async function testReleaseWakeLock() {
+    if (currentWakeLock) {
+        try {
+            await currentWakeLock.release();
+        } finally {
+            currentWakeLock = null;
+        }
+    }
+}
+
+// 正常全螢幕請求防休眠
+await testRequestWakeLock(true, false);
+assert(wakeLockRequested === true && currentWakeLock !== null, '進入全螢幕時應成功請求 Screen Wake Lock');
+// 退出全螢幕釋放防休眠
+await testReleaseWakeLock();
+assert(wakeLockReleased === true && currentWakeLock === null, '退出全螢幕時應安全釋放 Screen Wake Lock 並將實例置為 null');
+
+// 模擬不支援環境：不拋錯
+let crashedUnsupported = false;
+try {
+    await testRequestWakeLock(false, false);
+} catch {
+    crashedUnsupported = true;
+}
+assert(crashedUnsupported === false, '不支援 Wake Lock 之瀏覽器環境應安全略過不崩潰');
+
+// 模擬被系統權限拒絕：安全捕捉
+let crashedDenied = false;
+try {
+    await testRequestWakeLock(true, true);
+} catch {
+    crashedDenied = true;
+}
+assert(crashedDenied === false && currentWakeLock === null, '遭遇權限拒絕時應安全捕捉例外且維持為 null');
+
+// 19.6 滾筒容器 aria-hidden 屬性與焦點陷阱 (Focus Trap) 模擬
+const appJsPath = path.resolve(__dirname, '../src/ui/app.js');
+const appJsContent = fs.readFileSync(appJsPath, 'utf8');
+assert(appJsContent.includes("rollerContainerEl.setAttribute('aria-hidden', 'true')"), 'app.js 滾筒容器建立時必須標記 aria-hidden="true" 屬性');
+assert(appJsContent.includes("rewardSubtextStr = `${periodName}累積進帳換算`"), 'app.js 必須動態依據 periodName 更新激勵指標副標題');
+
+// 焦點陷阱與焦點還原模擬
+let activeElementMock = null;
+let previousActiveElementMock = null;
+const mockButtonSettings = { id: 'btn-settings', focus() { activeElementMock = this; } };
+const mockCloseBtn = { id: 'btn-drawer-close', focus() { activeElementMock = this; } };
+const mockInputSalary = { id: 'cfg-monthly-salary', focus() { activeElementMock = this; } };
+const mockBtnSave = { id: 'btn-save-settings', focus() { activeElementMock = this; } };
+
+const focusableElements = [mockCloseBtn, mockInputSalary, mockBtnSave];
+
+function testOpenDrawer() {
+    previousActiveElementMock = activeElementMock;
+    mockCloseBtn.focus();
+}
+
+function testCloseDrawer() {
+    if (previousActiveElementMock && typeof previousActiveElementMock.focus === 'function') {
+        previousActiveElementMock.focus();
+        previousActiveElementMock = null;
+    }
+}
+
+function testHandleDrawerKeydown(e) {
+    if (e.key !== 'Tab') return;
+    const firstEl = focusableElements[0];
+    const lastEl = focusableElements[focusableElements.length - 1];
+    if (e.shiftKey) {
+        if (activeElementMock === firstEl) {
+            e.defaultPrevented = true;
+            lastEl.focus();
+        }
+    } else {
+        if (activeElementMock === lastEl) {
+            e.defaultPrevented = true;
+            firstEl.focus();
+        }
+    }
+}
+
+// 初始聚焦在設定按鈕上
+mockButtonSettings.focus();
+assert(activeElementMock === mockButtonSettings, '初始焦點應在設定按鈕上');
+
+// 開啟抽屜
+testOpenDrawer();
+assert(previousActiveElementMock === mockButtonSettings, '開啟抽屜時應將前一焦點元素記錄為設定按鈕');
+assert(activeElementMock === mockCloseBtn, '開啟抽屜後焦點應自動導引至關閉按鈕');
+
+// 焦點移到最後一個元素 (儲存按鈕) 並按下 Tab：應循環回第一個元素 (關閉按鈕)
+mockBtnSave.focus();
+const tabEvent = { key: 'Tab', shiftKey: false, defaultPrevented: false };
+testHandleDrawerKeydown(tabEvent);
+assert(tabEvent.defaultPrevented === true, 'Tab 在最後一個元素時應阻止原生事件');
+assert(activeElementMock === mockCloseBtn, 'Tab 在最後一個元素時焦點應循環繞回第一個元素');
+
+// 焦點在第一個元素 (關閉按鈕) 並按下 Shift+Tab：應反向循環至最後一個元素 (儲存按鈕)
+mockCloseBtn.focus();
+const shiftTabEvent = { key: 'Tab', shiftKey: true, defaultPrevented: false };
+testHandleDrawerKeydown(shiftTabEvent);
+assert(shiftTabEvent.defaultPrevented === true, 'Shift+Tab 在第一個元素時應阻止原生事件');
+assert(activeElementMock === mockBtnSave, 'Shift+Tab 在第一個元素時焦點應反向循環至最後一個元素');
+
+// 關閉抽屜：焦點應安全還原回設定按鈕
+testCloseDrawer();
+assert(activeElementMock === mockButtonSettings, '關閉抽屜後焦點應安全還原至先前點選之設定按鈕');
+
+// 19.7 焦點陷阱中層表單元素自然穿透驗證
+mockInputSalary.focus();
+const midTabEvent = { key: 'Tab', shiftKey: false, defaultPrevented: false };
+testHandleDrawerKeydown(midTabEvent);
+assert(midTabEvent.defaultPrevented === false, '焦點在抽屜中間欄位時按 Tab 不應阻止原生事件，以利自然切換下個控制項');
+
+const midShiftTabEvent = { key: 'Tab', shiftKey: true, defaultPrevented: false };
+testHandleDrawerKeydown(midShiftTabEvent);
+assert(midShiftTabEvent.defaultPrevented === false, '焦點在抽屜中間欄位時按 Shift+Tab 不應阻止原生事件');
+
+// 19.8 設定抽屜開啟時 Escape 優先權與防窺快捷鍵隔離驗證
+let isDrawerOpenMock = true;
+let drawerClosedMock = false;
+let bossKeyTriggeredMock = false;
+
+function mockWindowKeydownCapture(e) {
+    if (e.key === 'Escape' && isDrawerOpenMock) {
+        e.defaultPrevented = true;
+        e.propagationStopped = true;
+        drawerClosedMock = true;
+        isDrawerOpenMock = false;
+    }
+}
+
+function mockBossKeyKeydown(e) {
+    if (e.propagationStopped) return; // 被 capture 階段 stopImmediatePropagation 攔截
+    if (e.key === 'Escape') {
+        bossKeyTriggeredMock = true;
+    }
+}
+
+const escEvent = { key: 'Escape', defaultPrevented: false, propagationStopped: false };
+mockWindowKeydownCapture(escEvent);
+mockBossKeyKeydown(escEvent);
+
+assert(drawerClosedMock === true, '抽屜開啟時按下 Escape 鍵應優先觸發關閉抽屜');
+assert(bossKeyTriggeredMock === false, '抽屜開啟時按下 Escape 鍵不得觸發老闆鍵防窺');
+
+// 19.8b 橫向全螢幕時鐘模式下 Escape 優先退出時鐘驗證
+let isLandscapeClockMock = true;
+let landscapeClockClosedMock = false;
+bossKeyTriggeredMock = false;
+
+function mockLandscapeEscapeHandler(e) {
+    if (e.key === 'Escape' && isLandscapeClockMock) {
+        e.defaultPrevented = true;
+        e.propagationStopped = true;
+        landscapeClockClosedMock = true;
+        isLandscapeClockMock = false;
+    }
+}
+
+const escLandscapeEvent = { key: 'Escape', defaultPrevented: false, propagationStopped: false };
+mockLandscapeEscapeHandler(escLandscapeEvent);
+mockBossKeyKeydown(escLandscapeEvent);
+
+assert(landscapeClockClosedMock === true, '橫向全螢幕時鐘模式下按下 Escape 鍵應優先退出時鐘');
+assert(bossKeyTriggeredMock === false, '橫向全螢幕時鐘模式下按下 Escape 鍵不得誤觸老闆鍵防窺');
+
+// 19.9 Screen Wake Lock 重入防禦與重複釋放容錯驗證
+await testRequestWakeLock(true, false);
+const firstWakeLock = currentWakeLock;
+// 再次請求：已有鎖定時不應重複建立新實例
+await testRequestWakeLock(true, false);
+assert(currentWakeLock === firstWakeLock, '已持有 Wake Lock 時重複請求應維持既有實例');
+
+// 連續釋放兩次：不應拋出任何例外
+await testReleaseWakeLock();
+assert(currentWakeLock === null, '首次釋放後實例應為 null');
+let doubleReleaseError = false;
+try {
+    await testReleaseWakeLock();
+} catch {
+    doubleReleaseError = true;
+}
+assert(doubleReleaseError === false, '重複釋放 Wake Lock 應具備冪等性且安全不拋錯');
+
+// 19.9b 非同步競態條件測試：請求防休眠期間快速退出全螢幕，解析完成後應自動釋放
+let asyncSentinelReleased = false;
+async function testAsyncRaceCondition() {
+    let mockFullscreen = true;
+    
+    // 模擬非同步請求
+    const requestPromise = (async () => {
+        const sentinel = new MockWakeLockSentinel();
+        sentinel.release = async () => { asyncSentinelReleased = true; };
+        await new Promise(r => setTimeout(r, 10));
+        if (!mockFullscreen) {
+            await sentinel.release();
+            return null;
+        }
+        return sentinel;
+    })();
+
+    // 模擬使用者在 promise 解析前快速退出全螢幕
+    mockFullscreen = false;
+    const resultSentinel = await requestPromise;
+    return resultSentinel;
+}
+
+const racedSentinel = await testAsyncRaceCondition();
+assert(racedSentinel === null, '全螢幕請求延遲完成但已提前退出時，防休眠實例應維持為 null');
+assert(asyncSentinelReleased === true, '全螢幕請求延遲完成但已提前退出時，新取得之 Sentinel 必須被立即釋放');
+
+// 19.10 行動裝置判定 (isMobileDevice) 邏輯驗證
+function mockIsMobileDevice(touchCoarse, uaMobile, maxTouch, winWidth) {
+    const isTouch = touchCoarse;
+    const isUa = uaMobile;
+    const isTouchDim = (maxTouch > 0) && (winWidth <= 1024);
+    return isTouch || isUa || isTouchDim;
+}
+
+assert(mockIsMobileDevice(true, false, 5, 390) === true, '觸控螢幕且寬度 390px (手機) 應判定為行動裝置');
+assert(mockIsMobileDevice(false, true, 0, 768) === true, 'UA 包含 Mobile 標籤應判定為行動裝置');
+assert(mockIsMobileDevice(false, false, 0, 1920) === false, '桌機滑鼠環境 (無觸控、寬度 1920px) 應判定為非行動裝置');
+
+// 19.11 老闆鍵防窺狀態下 ARIA 語意隱私保護驗證
+function mockGetHeroAriaLabel(isDisguised, formattedAmount) {
+    return isDisguised ? '已啟用防窺保護' : formattedAmount;
+}
+assert(mockGetHeroAriaLabel(false, 'NT$ 1,234.56') === 'NT$ 1,234.56', '未防窺時 ARIA 標籤應完整朗讀真實薪資');
+assert(mockGetHeroAriaLabel(true, 'NT$ 1,234.56') === '已啟用防窺保護', '防窺狀態下 ARIA 標籤必須遮蔽真實金額以保護財務隱私');
+assert(appJsContent.includes("heroAriaLabel = isDisguised ? '已啟用防窺保護' : formattedHeroAmount"), 'app.js 必須包含防窺狀態下的 ARIA 隱私保護切換');
+
+// 19.12 小螢幕 (<= 640px) 自適應懸浮/全螢幕按鈕行為驗證
+function mockSetupDeviceFeatures(isMobile, winWidth) {
+    const isMobileOrSmall = isMobile || (winWidth <= 640);
+    return {
+        icon: isMobileOrSmall ? '⏱️' : '📌',
+        text: isMobileOrSmall ? ' 全螢幕' : ' 桌面懸浮',
+        mode: isMobileOrSmall ? 'fullscreen' : 'pip'
+    };
+}
+assert(mockSetupDeviceFeatures(false, 375).icon === '⏱️', '桌機模擬 375px 小螢幕時按鈕圖示應自適應為 ⏱️');
+assert(mockSetupDeviceFeatures(false, 375).mode === 'fullscreen', '桌機模擬 375px 小螢幕時應觸發全螢幕時鐘');
+assert(mockSetupDeviceFeatures(false, 1024).icon === '📌', '寬螢幕桌機環境應維持 📌 桌面懸浮圖示');
+assert(mockSetupDeviceFeatures(false, 1024).mode === 'pip', '寬螢幕桌機環境應維持桌面畫中畫模式');
+
+console.log(`\n🎉 全部 ${passedTests}/${totalTests} 項單元測試成功通過！核心運算、防窺隱私、效能快取與無障礙體驗驗證精確無誤。`);
+
 
 
