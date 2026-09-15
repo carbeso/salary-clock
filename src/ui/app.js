@@ -3,8 +3,8 @@
  * 整合防窺模式加強、三進度條、多元指標激勵卡片與免橫條設定抽屜
  */
 
-import { loadConfig, saveConfig, resetConfig, REWARD_PRESETS } from '../core/storage.js';
-import { calculateSalary } from '../core/engine.js';
+import { loadConfig, saveConfig, resetConfig, REWARD_PRESETS, STORAGE_KEY } from '../core/storage.js';
+import { calculateSalary, clearEngineCache } from '../core/engine.js';
 import {
     formatCurrency,
     formatDurationChinese,
@@ -43,6 +43,8 @@ class SalaryClockApp {
             statusBadge: document.getElementById('status-badge'),
             statusText: document.getElementById('status-text'),
             amountLabel: document.getElementById('amount-label'),
+            amountLabelIcon: document.getElementById('amount-label-icon'), // 快取圖示節點引用
+            amountLabelText: document.getElementById('amount-label-text'), // 快取文字節點引用
             amountWrapper: document.getElementById('amount-wrapper'),
             heroAmount: document.getElementById('hero-amount'),
             disguiseOverlay: document.getElementById('disguise-overlay'),
@@ -149,6 +151,9 @@ class SalaryClockApp {
 
         // 節流快取：記錄下排卡片每秒跳動的時間戳記 (秒數整點刷新)
         this.lastSecondTick = 0;
+
+        // 英雄卡滾動數字 DOM 結構快取（徹底消除 33ms 每幀 querySelector 走訪開銷）
+        this.cachedHeroAmount = null;
 
         this.init();
     }
@@ -278,6 +283,12 @@ class SalaryClockApp {
         if (this.dom.cardPeriodMonth) {
             this.dom.cardPeriodMonth.addEventListener('click', () => this.setActiveView('month'));
         }
+
+        // 頁面可見性變化 (Page Visibility API)：背景省電降頻與切回前景即時補算
+        document.addEventListener('visibilitychange', () => this.handleVisibilityChange());
+
+        // 跨分頁即時同步 (Cross-Tab Real-time Storage Sync)
+        window.addEventListener('storage', (e) => this.handleStorageEvent(e));
     }
 
     /**
@@ -365,16 +376,13 @@ class SalaryClockApp {
             : intPart;
 
         if (decimals === 4) {
-            this.dom.heroAmount.classList.add('is-rolling');
+            if (!this.dom.heroAmount.classList.contains('is-rolling')) {
+                this.dom.heroAmount.classList.add('is-rolling');
+            }
 
-            // 檢查現有結構是否已為 4 位數老虎機滾輪
-            let rollerContainer = this.dom.heroAmount.querySelector('.amount-dec-roller');
-            let intSpan = this.dom.heroAmount.querySelector('.amount-int');
-            let symbolSpan = this.dom.heroAmount.querySelector('.amount-symbol');
-            const strips = rollerContainer ? rollerContainer.querySelectorAll('.digit-slot-strip') : null;
-
-            if (!rollerContainer || !intSpan || !strips || strips.length !== 4) {
-                // 首次建立老虎機結構 (僅在模式切換或初次載入時執行一次)
+            // 檢查是否已存在 4 位數老虎機快取結構
+            if (!this.cachedHeroAmount || this.cachedHeroAmount.mode !== 4) {
+                // 首次建立老虎機結構 (僅在小數位數模式切換或初次載入時執行一次)
                 // 安全防護：使用 DOM 節點建立與 textContent 賦值，徹底根除 innerHTML 拼接未過濾 symbol 的 XSS 隱患
                 this.dom.heroAmount.replaceChildren();
 
@@ -393,6 +401,7 @@ class SalaryClockApp {
                 const rollerContainerEl = document.createElement('span');
                 rollerContainerEl.className = 'amount-dec-roller';
 
+                const strips = [];
                 decPart.split('').forEach((digit, idx) => {
                     const targetY = -Number(digit) * 1.15; // 每個數字高度 1.15em
                     const isFast = idx >= 2 ? 'fast-rolling' : '';
@@ -412,12 +421,20 @@ class SalaryClockApp {
 
                     slot.appendChild(strip);
                     rollerContainerEl.appendChild(slot);
+                    strips.push(strip);
                 });
 
                 this.dom.heroAmount.append(symbolSpanEl, intSpanEl, dotSpanEl, rollerContainerEl);
+
+                this.cachedHeroAmount = {
+                    mode: 4,
+                    symbolSpan: symbolSpanEl,
+                    intSpan: intSpanEl,
+                    strips
+                };
             } else {
-                // 核心關鍵優化：節點複用，絕不在 33ms 計時器中頻繁銷毀與重建 DOM 節點！
-                // 徹底避免因 innerHTML 重建導致使用者的點擊 (click) 事件在 MouseDown/Up 期間被瀏覽器判定中斷而遺失！
+                // 核心關鍵優化：直接複用已快取之節點引用與 strips 陣列，徹底消除 33ms 每幀 4 次 querySelector 開銷！
+                const { symbolSpan, intSpan, strips } = this.cachedHeroAmount;
                 if (symbolSpan.textContent !== symbol) symbolSpan.textContent = symbol;
                 if (intSpan.textContent !== formattedInt) intSpan.textContent = formattedInt;
 
@@ -428,12 +445,11 @@ class SalaryClockApp {
                 }
             }
         } else {
-            this.dom.heroAmount.classList.remove('is-rolling');
-            let intSpan = this.dom.heroAmount.querySelector('.amount-int');
-            let decSpan = this.dom.heroAmount.querySelector('.amount-dec');
-            let symbolSpan = this.dom.heroAmount.querySelector('.amount-symbol');
+            if (this.dom.heroAmount.classList.contains('is-rolling')) {
+                this.dom.heroAmount.classList.remove('is-rolling');
+            }
 
-            if (!decSpan || !intSpan) {
+            if (!this.cachedHeroAmount || this.cachedHeroAmount.mode !== 2) {
                 // 安全防護：採用安全 DOM 節點建立與 textContent，消除 innerHTML XSS 隱患
                 this.dom.heroAmount.replaceChildren();
 
@@ -454,7 +470,15 @@ class SalaryClockApp {
                 decSpanEl.textContent = decPart;
 
                 this.dom.heroAmount.append(symbolSpanEl, intSpanEl, dotSpanEl, decSpanEl);
+
+                this.cachedHeroAmount = {
+                    mode: 2,
+                    symbolSpan: symbolSpanEl,
+                    intSpan: intSpanEl,
+                    decSpan: decSpanEl
+                };
             } else {
+                const { symbolSpan, intSpan, decSpan } = this.cachedHeroAmount;
                 if (symbolSpan.textContent !== symbol) symbolSpan.textContent = symbol;
                 if (intSpan.textContent !== formattedInt) intSpan.textContent = formattedInt;
                 if (decSpan.textContent !== decPart) decSpan.textContent = decPart;
@@ -463,80 +487,136 @@ class SalaryClockApp {
 
         const formattedHeroAmount = `${symbol} ${formattedInt}.${decPart}`;
 
-        // 英雄卡左上方標籤：帶圖示與「本日累積 / 本週累積 / 本月累積」，採節點複用與安全文字節點
+        // 針對 33ms 高頻跳動的進度條，動態切換 .no-transition 類別（髒檢查比對，避免每幀重複 toggle）
+        const isHighFreq = decimals === 4;
+        if (this.dom.heroProgressFill && this.dom.heroProgressFill.classList.contains('no-transition') !== isHighFreq) {
+            this.dom.heroProgressFill.classList.toggle('no-transition', isHighFreq);
+        }
+        if (this.dom.rewardProgressFill && this.dom.rewardProgressFill.classList.contains('no-transition') !== isHighFreq) {
+            this.dom.rewardProgressFill.classList.toggle('no-transition', isHighFreq);
+        }
+
+        // 英雄卡左上方標籤：帶圖示與「本日累積 / 本週累積 / 本月累積」，採節點快取、複用與髒檢查
         let periodIcon = '☀️';
         if (this.activeView === 'week') periodIcon = '📅';
         if (this.activeView === 'month') periodIcon = '🗓️';
 
-        let iconSpan = this.dom.amountLabel.querySelector('.amount-label-icon');
-        let textSpan = this.dom.amountLabel.querySelector('.amount-label-text');
+        let iconSpan = this.dom.amountLabelIcon;
+        let textSpan = this.dom.amountLabelText;
 
-        if (!iconSpan || !textSpan) {
+        if (!iconSpan || !textSpan || !iconSpan.parentNode) {
             this.dom.amountLabel.replaceChildren();
             iconSpan = document.createElement('span');
             iconSpan.className = 'amount-label-icon';
             textSpan = document.createElement('span');
             textSpan.className = 'amount-label-text';
             this.dom.amountLabel.append(iconSpan, textSpan);
+            this.dom.amountLabelIcon = iconSpan;
+            this.dom.amountLabelText = textSpan;
         }
 
         if (iconSpan.textContent !== periodIcon) iconSpan.textContent = periodIcon;
         const periodText = ` ${periodName}累積`;
         if (textSpan.textContent !== periodText) textSpan.textContent = periodText;
 
-        // 2. 狀態徽章
-        this.dom.statusText.textContent = result.statusText;
-        if (result.status === 'OFF_WORK' || result.status === 'DAY_OFF') {
+        // 2. 狀態徽章（髒檢查賦值）
+        if (this.dom.statusText.textContent !== result.statusText) {
+            this.dom.statusText.textContent = result.statusText;
+        }
+        const isOff = (result.status === 'OFF_WORK' || result.status === 'DAY_OFF');
+        const hasOff = this.dom.statusBadge.classList.contains('off');
+        if (isOff && !hasOff) {
             this.dom.statusBadge.classList.add('off');
-        } else {
+        } else if (!isOff && hasOff) {
             this.dom.statusBadge.classList.remove('off');
         }
 
-        // 3. 下班倒數
+        // 3. 下班倒數（髒檢查賦值）
         if (result.mode === 'workday') {
-            this.dom.countdownWrapper.style.display = 'block';
+            if (this.dom.countdownWrapper.style.display !== 'block') {
+                this.dom.countdownWrapper.style.display = 'block';
+            }
+            let countdownStr = '';
             if (result.status === 'WORKING' || result.status === 'ON_BREAK') {
-                this.dom.countdownText.textContent = formatDurationChinese(result.remainingSecondsToOff);
+                countdownStr = formatDurationChinese(result.remainingSecondsToOff);
             } else if (result.status === 'BEFORE_WORK') {
-                this.dom.countdownText.textContent = '尚未開始上班';
+                countdownStr = '尚未開始上班';
             } else {
-                this.dom.countdownText.textContent = '今日已打卡下班';
+                countdownStr = '今日已打卡下班';
+            }
+            if (this.dom.countdownText.textContent !== countdownStr) {
+                this.dom.countdownText.textContent = countdownStr;
             }
         } else if (result.mode === 'continuous') {
-            this.dom.countdownWrapper.style.display = 'none';
+            if (this.dom.countdownWrapper.style.display !== 'none') {
+                this.dom.countdownWrapper.style.display = 'none';
+            }
         } else if (result.mode === 'freelance') {
-            this.dom.countdownWrapper.style.display = 'block';
-            this.dom.countdownText.textContent = `已累計 ${formatStopwatch(result.accumulatedSeconds)}`;
+            if (this.dom.countdownWrapper.style.display !== 'block') {
+                this.dom.countdownWrapper.style.display = 'block';
+            }
+            const stopwatchStr = `已累計 ${formatStopwatch(result.accumulatedSeconds)}`;
+            if (this.dom.countdownText.textContent !== stopwatchStr) {
+                this.dom.countdownText.textContent = stopwatchStr;
+            }
         }
 
-        // 4. 英雄卡對應累積進度條
+        // 4. 英雄卡對應累積進度條（髒檢查賦值）
         if (result.mode === 'freelance') {
-            this.dom.heroProgressSection.style.display = 'none';
+            if (this.dom.heroProgressSection.style.display !== 'none') {
+                this.dom.heroProgressSection.style.display = 'none';
+            }
         } else {
-            this.dom.heroProgressSection.style.display = 'block';
-            this.dom.heroProgressLabel.textContent = `${periodName}工時進度`;
-            this.dom.heroProgressPercent.textContent = formatPercentage(targetProgress, 1);
-            this.dom.heroProgressFill.style.width = `${Math.min(100, Math.max(0, targetProgress))}%`;
+            if (this.dom.heroProgressSection.style.display !== 'block') {
+                this.dom.heroProgressSection.style.display = 'block';
+            }
+            const expectedLabel = `${periodName}工時進度`;
+            if (this.dom.heroProgressLabel.textContent !== expectedLabel) {
+                this.dom.heroProgressLabel.textContent = expectedLabel;
+            }
+            const expectedPercent = formatPercentage(targetProgress, 1);
+            if (this.dom.heroProgressPercent.textContent !== expectedPercent) {
+                this.dom.heroProgressPercent.textContent = expectedPercent;
+            }
+            const targetWidthStr = `${Math.min(100, Math.max(0, targetProgress))}%`;
+            if (this.dom.heroProgressFill.style.width !== targetWidthStr) {
+                this.dom.heroProgressFill.style.width = targetWidthStr;
+            }
         }
 
-        // 5. 趣味激勵指標卡片：戰利品圖示牆（依據聚焦維度計算無條件捨去）
+        // 5. 趣味激勵指標卡片：戰利品圖示牆（依據聚焦維度計算無條件捨去，髒檢查賦值）
         const reward = result.rewardInfo;
         if (reward) {
-            this.dom.rewardIcon.textContent = reward.icon || '☕';
-            this.dom.rewardName.textContent = `${reward.name} 指標`;
+            const rewardIcon = reward.icon || '☕';
+            if (this.dom.rewardIcon.textContent !== rewardIcon) {
+                this.dom.rewardIcon.textContent = rewardIcon;
+            }
+            const rewardNameStr = `${reward.name} 指標`;
+            if (this.dom.rewardName.textContent !== rewardNameStr) {
+                this.dom.rewardName.textContent = rewardNameStr;
+            }
             // 依據目前聚焦維度的累積金額進行無條件捨去
             const rewardCount = reward.price > 0 ? (targetAmount / reward.price) : 0;
             const completedCount = Math.floor(rewardCount);
             // 目前累進進度百分比 (當前金額相對於下一個目標的已達成進度，如 78.4% 或滿額比例)
             const currentProgress = reward.price > 0 ? Math.min(100, ((targetAmount % reward.price) / reward.price) * 100) : 0;
 
-            this.dom.rewardCountVal.textContent = `${completedCount} ${reward.unit}`;
-            this.dom.rewardProgressFill.style.width = `${currentProgress.toFixed(1)}%`;
-            this.dom.rewardProgressHint.textContent = `目前累進進度 ${currentProgress.toFixed(1)}%`;
+            const countStr = `${completedCount} ${reward.unit}`;
+            if (this.dom.rewardCountVal.textContent !== countStr) {
+                this.dom.rewardCountVal.textContent = countStr;
+            }
+            const rewardWidthStr = `${currentProgress.toFixed(1)}%`;
+            if (this.dom.rewardProgressFill.style.width !== rewardWidthStr) {
+                this.dom.rewardProgressFill.style.width = rewardWidthStr;
+            }
+            const hintStr = `目前累進進度 ${currentProgress.toFixed(1)}%`;
+            if (this.dom.rewardProgressHint.textContent !== hintStr) {
+                this.dom.rewardProgressHint.textContent = hintStr;
+            }
         }
 
-        // 6. 下方三維度卡片（本日、本週、本月）數據更新
-        // 依據使用者需求：即使上方英雄卡以 4 位數高速飛轉，下排卡片仍維持標準 2 位數且每秒穩定跳動一次
+        // 6. 下方三維度卡片（本日、本週、本月）與固定工時換算數據更新
+        // 依據使用者需求：即使上方英雄卡以 4 位數高速飛轉，下排卡片與固定工時列仍維持標準 2 位數且每秒穩定跳動一次
         const currentSec = Math.floor(now.getTime() / 1000);
         const shouldUpdateLowerCards = (currentSec !== this.lastSecondTick);
 
@@ -560,30 +640,34 @@ class SalaryClockApp {
                 this.dom.monthCardPercent.textContent = formatPercentage(result.monthProgress, 1);
                 this.dom.monthCardFill.style.width = `${Math.min(100, Math.max(0, result.monthProgress))}%`;
             }
+
+            // 7. 固定工時換算參考（秒、分、時、日、週）
+            const secRate = result.ratePerSecond;
+            const minRate = secRate * 60;
+            const hourRate = secRate * 3600;
+            const dailyRate = result.totalDailySeconds ? (result.totalDailySeconds * secRate) : (hourRate * 8);
+            const weeklyRate = dailyRate * (result.totalWeekWorkDays || 5);
+
+            if (this.dom.rateSecFixed) this.dom.rateSecFixed.textContent = `${formatCurrency(secRate, symbol, 4, false)}`;
+            if (this.dom.rateMinFixed) this.dom.rateMinFixed.textContent = `${formatCurrency(minRate, symbol, 2)}`;
+            if (this.dom.rateHourFixed) this.dom.rateHourFixed.textContent = `${formatCurrency(hourRate, symbol, 0)}`;
+            if (this.dom.rateDayFixed) this.dom.rateDayFixed.textContent = `${formatCurrency(dailyRate, symbol, 0)}`;
+            if (this.dom.rateWeekFixed) this.dom.rateWeekFixed.textContent = `${formatCurrency(weeklyRate, symbol, 0)}`;
         }
 
-        // 7. 固定工時換算參考（秒、分、時、日、週）
-        const secRate = result.ratePerSecond;
-        const minRate = secRate * 60;
-        const hourRate = secRate * 3600;
-        const dailyRate = result.totalDailySeconds ? (result.totalDailySeconds * secRate) : (hourRate * 8);
-        const weeklyRate = dailyRate * (result.totalWeekWorkDays || 5);
-
-        if (this.dom.rateSecFixed) this.dom.rateSecFixed.textContent = `${formatCurrency(secRate, symbol, 4, false)}`;
-        if (this.dom.rateMinFixed) this.dom.rateMinFixed.textContent = `${formatCurrency(minRate, symbol, 2)}`;
-        if (this.dom.rateHourFixed) this.dom.rateHourFixed.textContent = `${formatCurrency(hourRate, symbol, 0)}`;
-        if (this.dom.rateDayFixed) this.dom.rateDayFixed.textContent = `${formatCurrency(dailyRate, symbol, 0)}`;
-        if (this.dom.rateWeekFixed) this.dom.rateWeekFixed.textContent = `${formatCurrency(weeklyRate, symbol, 0)}`;
-
-        // 8. 老闆鍵防窺遮罩內容（若啟用）
+        // 8. 老闆鍵防窺遮罩內容（若啟用，加入髒檢查比對）
         if (this.bossKey.isActive()) {
+            let disguiseContent = '';
             if (this.bossKey.mode === 'clock') {
                 const hours = String(now.getHours()).padStart(2, '0');
                 const minutes = String(now.getMinutes()).padStart(2, '0');
                 const seconds = String(now.getSeconds()).padStart(2, '0');
-                this.dom.disguiseOverlay.textContent = `${hours}:${minutes}:${seconds}`;
+                disguiseContent = `${hours}:${minutes}:${seconds}`;
             } else {
-                this.dom.disguiseOverlay.textContent = `${symbol} ••••••`;
+                disguiseContent = `${symbol} ••••••`;
+            }
+            if (this.dom.disguiseOverlay.textContent !== disguiseContent) {
+                this.dom.disguiseOverlay.textContent = disguiseContent;
             }
         }
 
@@ -730,6 +814,73 @@ class SalaryClockApp {
 
     handlePiPClose() {
         this.updatePipButtonState(false);
+        // 若懸浮視窗關閉時，當前分頁恰好處於背景，則立即降頻至 5 秒省電模式
+        if (typeof document !== 'undefined' && document.hidden) {
+            this.throttleToBackgroundRate();
+        }
+    }
+
+    /**
+     * 處理頁面可見性變化 (Page Visibility API)
+     * 當分頁置於背景且未開啟畫中畫 (PiP) 懸浮視窗時，主動將計時器降頻至 5000ms (5秒) 以節省 CPU 與電池能耗；
+     * 當切回前景時，立即恢復原訂之 33ms (或 1000ms) 刷新頻率，並立刻強制重算補齊畫面數值。
+     */
+    handleVisibilityChange() {
+        if (typeof document === 'undefined') return;
+
+        if (document.hidden) {
+            // 分頁切換至背景
+            // 檢查是否開著桌面置頂畫中畫視窗 (PiP)
+            if (!this.pipController.isOpen()) {
+                // 未開啟 PiP：降頻至 5 秒 (5000ms)，進入深度省電待機狀態
+                this.throttleToBackgroundRate();
+            }
+            // 若有開啟 PiP，使用者正在桌面監看，維持原頻率讓置頂懸浮窗平滑跳動
+        } else {
+            // 切回前景：立即恢復正常計時迴圈，並立即重算補齊畫面數值
+            this.startTickLoop();
+        }
+    }
+
+    /**
+     * 降頻至背景省電速率 (5000ms)
+     */
+    throttleToBackgroundRate() {
+        if (this.timerId) {
+            clearInterval(this.timerId);
+            this.timerId = null;
+        }
+        // 背景省電模式每 5 秒僅觸發一次低頻運算
+        this.timerId = setInterval(() => {
+            const now = new Date();
+            const result = calculateSalary(this.config, now);
+            this.render(result, now);
+        }, 5000);
+    }
+
+    /**
+     * 處理跨分頁 Storage 事件 (Cross-Tab Real-time Sync)
+     * 當其他分頁儲存設定、更新碼錶狀態或清空快取時，即時更新本分頁記憶體設定並重新渲染
+     * @param {StorageEvent} e
+     */
+    handleStorageEvent(e) {
+        if (!e || e.key === STORAGE_KEY || e.key === null) {
+            // 清空核心計算引擎日期快取，確保重新載入之組態立即生效
+            clearEngineCache();
+            this.config = loadConfig();
+            this.syncSettingsForm();
+            this.updateModeUI();
+            this.bossKey.setMode(this.config.bossKeyDisguise || 'mask');
+
+            // 若當前在前景，重新啟動計時迴圈；若在背景且無 PiP，則執行一次補算後維持省電
+            if (typeof document !== 'undefined' && document.hidden && !this.pipController.isOpen()) {
+                const now = new Date();
+                const result = calculateSalary(this.config, now);
+                this.render(result, now);
+            } else {
+                this.startTickLoop();
+            }
+        }
     }
 
     /**
@@ -914,6 +1065,9 @@ class SalaryClockApp {
         // 更新防窺控制器的模式
         this.bossKey.setMode(this.config.bossKeyDisguise);
 
+        // 清空核心計算引擎快取，確保新設定生效
+        clearEngineCache();
+
         // 儲存至本機
         saveConfig(this.config);
         this.updateModeUI();
@@ -926,6 +1080,8 @@ class SalaryClockApp {
      */
     resetSettingsToDefault() {
         if (confirm('確定要將所有薪資與時間設定還原為初始預設值嗎？')) {
+            // 清空核心計算引擎快取
+            clearEngineCache();
             this.config = resetConfig();
             this.syncSettingsForm();
             this.updateModeUI();

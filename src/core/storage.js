@@ -8,7 +8,7 @@
  * 3. 容量充沛：LocalStorage 提供充足空間保存各項客製化薪資與工時組態
  */
 
-const STORAGE_KEY = 'salary_clock_user_config_v1';
+export const STORAGE_KEY = 'salary_clock_user_config_v1';
 const LEGACY_COOKIE_KEY = 'salary_clock_user_config_v1';
 
 /**

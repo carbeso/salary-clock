@@ -434,6 +434,15 @@ body {
     transition: width 0.4s ease;
 }
 
+/* 效能最佳化：消除 33ms 高頻跳動下 transition 動畫頻繁中斷造成的強制重排 (Layout Reflow) 與卡頓
+   當進度條帶有 .no-transition 或處於高速滾動模式 / PiP 模式時，立即停用 transition */
+.progress-fill.no-transition,
+.reward-progress-fill.no-transition,
+.pip-progress-fill.no-transition,
+body.pip-mode-active .pip-progress-fill {
+    transition: none !important;
+}
+
 .progress-fill-today {
     background: linear-gradient(90deg, var(--accent-indigo) 0%, var(--accent-emerald) 100%);
     box-shadow: 0 0 8px rgba(16, 185, 129, 0.4);

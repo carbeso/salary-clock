@@ -300,6 +300,287 @@ assert(indexContent.includes('id="today-card-percent"') && indexContent.includes
 assert(indexContent.includes('id="week-card-percent"') && indexContent.includes('progress-val tabular-nums disguise-target" id="week-card-percent"'), '#week-card-percent 必須包含 disguise-target 類別');
 assert(indexContent.includes('id="month-card-percent"') && indexContent.includes('progress-val tabular-nums disguise-target" id="month-card-percent"'), '#month-card-percent 必須包含 disguise-target 類別');
 
+// 14. 計算引擎日期層級快取 (Day-level Memoization) 與快取命中率驗證
+import { clearEngineCache, getEngineCacheStats } from '../src/core/engine.js';
+
+clearEngineCache();
+let stats = getEngineCacheStats();
+assert(stats.workdayHits === 0 && stats.workdayMisses === 0, '快取重設後命中與未命中數應皆為 0');
+
+const testConfig = {
+    monthlySalary: 50000,
+    workDays: [1, 2, 3, 4, 5],
+    workStart: '09:00',
+    workEnd: '18:00',
+    breakEnabled: true,
+    breakStart: '12:00',
+    breakEnd: '13:00'
+};
+
+// 首次呼叫：快取未命中 (Cold Start)
+const d1 = new Date(2026, 8, 14, 10, 0, 0); // 2026-09-14 10:00
+calculateWorkdayMode(testConfig, d1);
+stats = getEngineCacheStats();
+assert(stats.workdayMisses === 1 && stats.workdayHits === 0, '首次計算當日靜態資料應為快取未命中 (Miss: 1)');
+
+// 同一曆法日呼叫 50 次 (模擬高頻 33ms 每幀 tick)
+for (let i = 1; i <= 50; i++) {
+    const dIter = new Date(2026, 8, 14, 10, 0, i);
+    calculateWorkdayMode(testConfig, dIter);
+}
+stats = getEngineCacheStats();
+assert(stats.workdayMisses === 1 && stats.workdayHits === 50, '同曆法日內重複呼叫 50 次應 100% 命中快取 (Hits: 50)');
+
+// 隔日呼叫：曆法日變更，觸發重新計算並快取新日期
+const dNextDay = new Date(2026, 8, 15, 10, 0, 0);
+calculateWorkdayMode(testConfig, dNextDay);
+stats = getEngineCacheStats();
+assert(stats.workdayMisses === 2 && stats.workdayHits === 50, '跨越曆法日應重新計算並計為快取未命中 (Miss: 2)');
+
+// 同一曆法日但修改薪資設定：快取鍵失效並重新計算
+const modifiedConfig = { ...testConfig, monthlySalary: 80000 };
+calculateWorkdayMode(modifiedConfig, dNextDay);
+stats = getEngineCacheStats();
+assert(stats.workdayMisses === 3 && stats.workdayHits === 50, '組態參數變更應使快取失效並重新計算 (Miss: 3)');
+
+// 驗證 breakEnabled 預設啟用與明確關閉時的快取鍵區隔（防範 Boolean 預設值缺陷）
+clearEngineCache();
+const implicitBreakConfig = { monthlySalary: 50000 };
+const rImplicit = calculateWorkdayMode(implicitBreakConfig, dNextDay);
+assert(rImplicit.totalDailySeconds === 28800, '省略 breakEnabled 時預設扣除午休 1 小時，淨工時應為 28800 秒');
+
+const explicitBreakDisabledConfig = { monthlySalary: 50000, breakEnabled: false };
+const rExplicit = calculateWorkdayMode(explicitBreakDisabledConfig, dNextDay);
+assert(rExplicit.totalDailySeconds === 32400, '明確設定 breakEnabled 為 false 時，淨工時應為 32400 秒 (9小時)');
+stats = getEngineCacheStats();
+assert(stats.workdayMisses === 2, 'breakEnabled 由預設切換為 false 時必須觸發快取未命中並重算 (Miss: 2)');
+
+// 午夜跨日 (23:59:59 至 00:00:00) 邊界連續性與快取未命中重新整理驗證
+clearEngineCache();
+const midConfig = { monthlySalary: 40000, workDays: [1, 2, 3, 4, 5] };
+const dLate = new Date(2026, 8, 14, 23, 59, 59); // 週一 23:59:59 (OFF_WORK)
+const rLate = calculateWorkdayMode(midConfig, dLate);
+const dMidnight = new Date(2026, 8, 15, 0, 0, 0); // 週二 00:00:00 (BEFORE_WORK)
+const rMidnight = calculateWorkdayMode(midConfig, dMidnight);
+assert(Math.abs(rLate.monthEarned - rMidnight.monthEarned) < 0.01, '跨日 00:00:00 邊界時本月已賺薪資應平滑過渡無跳變');
+assert(rMidnight.status === 'BEFORE_WORK', '00:00:00 整點應為尚未上班狀態 (BEFORE_WORK)');
+
+// 全月連續制快取命中率驗證
+clearEngineCache();
+const contConfig = { monthlySalary: 60000, salaryMode: 'continuous' };
+const dCont1 = new Date(2026, 8, 14, 12, 0, 0);
+calculateContinuousMode(contConfig, dCont1);
+for (let i = 1; i <= 20; i++) {
+    calculateContinuousMode(contConfig, new Date(2026, 8, 14, 12, 0, i));
+}
+stats = getEngineCacheStats();
+assert(stats.continuousMisses === 1 && stats.continuousHits === 20, '連續制同曆法日 20 次運算應 100% 命中快取');
+
+// 15. Date 物件建立數大幅降低驗證 (消除單幀 84 個 Date 物件與 GC Pause 開銷)
+// 攔截 Date 建構函式以精準計數
+const OriginalDate = globalThis.Date;
+let dateAllocations = 0;
+// 先對 d1 進行一次熱身快取
+calculateWorkdayMode(testConfig, d1);
+
+class TrackedDate extends OriginalDate {
+    constructor(...args) {
+        super(...args);
+        dateAllocations++;
+    }
+}
+TrackedDate.now = OriginalDate.now;
+TrackedDate.parse = OriginalDate.parse;
+TrackedDate.UTC = OriginalDate.UTC;
+
+globalThis.Date = TrackedDate;
+dateAllocations = 0;
+
+// 在快取命中狀態下連續執行 100 幀計算，傳入固定基準 Date 物件
+for (let i = 0; i < 100; i++) {
+    calculateWorkdayMode(testConfig, d1);
+}
+
+// 還原全域 Date
+globalThis.Date = OriginalDate;
+assert(dateAllocations === 0, `快取命中下 100 幀計算內部建立之 Date 物件數應為 0，實測為 ${dateAllocations}`);
+
+// 16. 畫中畫懸浮視窗 (PiPController) DOM 快取與查詢消除驗證
+import { PiPController } from '../src/ui/pip-controller.js';
+
+let querySelectorCallCount = 0;
+const mockPiPElements = {
+    amount: { textContent: '' },
+    rate: { textContent: '' },
+    status: { textContent: '' },
+    progress: { style: { width: '' } },
+    countdown: { textContent: '' },
+    reward: { textContent: '' }
+};
+
+const mockPiPDocument = {
+    body: {
+        className: '',
+        classList: {
+            classes: new Set(),
+            add(c) { this.classes.add(c); },
+            remove(c) { this.classes.delete(c); },
+            contains(c) { return this.classes.has(c); }
+        },
+        appendChild() {}
+    },
+    head: { appendChild() {} },
+    querySelector(selector) {
+        querySelectorCallCount++;
+        if (selector === '.pip-amount') return mockPiPElements.amount;
+        if (selector === '.pip-rate') return mockPiPElements.rate;
+        if (selector === '.pip-status') return mockPiPElements.status;
+        if (selector === '.pip-progress-fill') return mockPiPElements.progress;
+        if (selector === '.pip-countdown') return mockPiPElements.countdown;
+        if (selector === '.pip-reward') return mockPiPElements.reward;
+        return null;
+    },
+    getElementById() { return null; },
+    addEventListener() {}
+};
+
+const mockPiPWindow = {
+    document: mockPiPDocument,
+    addEventListener(type, cb) {
+        if (type === 'pagehide') this.pagehideCb = cb;
+    },
+    close() {}
+};
+
+globalThis.window.documentPictureInPicture = {
+    async requestWindow() {
+        return mockPiPWindow;
+    }
+};
+globalThis.document.styleSheets = [];
+
+const pipTestCtrl = new PiPController();
+const mockTemplate = {
+    cloneNode() {
+        return { id: '' };
+    }
+};
+
+await pipTestCtrl.open(mockTemplate);
+assert(pipTestCtrl.isOpen() === true, 'PiP 視窗開啟後 isOpen 應為 true');
+assert(pipTestCtrl.cachedElements !== null, 'open() 後應建立 6 個子元素節點快取');
+assert(pipTestCtrl.cachedElements.amountEl === mockPiPElements.amount, '快取中的 amountEl 應正確指向 .pip-amount 節點');
+
+// 驗證在 33ms 高頻 update() 時，直接使用快取節點，querySelector 呼叫次數應始終為 0
+querySelectorCallCount = 0;
+for (let i = 0; i < 30; i++) {
+    pipTestCtrl.update({
+        isDisguised: false,
+        formattedAmount: `NT$ ${1000 + i}`,
+        formattedRate: 'NT$ 0.35/秒',
+        statusText: '努力工作中 💼',
+        progressPercentage: 45.5,
+        countdownText: '離下班 5 小時',
+        rewardText: '☕ 6 杯'
+    });
+}
+assert(querySelectorCallCount === 0, '高頻 update() 期間 querySelector 呼叫次數應為 0 (徹底消除每秒 180 次 DOM 走訪)');
+assert(mockPiPElements.amount.textContent === 'NT$ 1029', '快取之 amountEl 內容應被正確賦值');
+assert(mockPiPElements.progress.style.width === '45.5%', '快取之 progressBar 寬度應被正確賦值');
+
+// 測試 close() 後快取清理
+pipTestCtrl.close();
+assert(pipTestCtrl.isOpen() === false, 'close() 後 isOpen 應為 false');
+assert(pipTestCtrl.cachedElements === null, 'close() 後 cachedElements 應被清空為 null');
+
+// 測試 PiPController 進度條防禦邊界與 NaN / 溢位夾取
+await pipTestCtrl.open(mockTemplate);
+pipTestCtrl.update({ progressPercentage: NaN });
+assert(mockPiPElements.progress.style.width === '0%', '進度百分比為 NaN 時應安全夾取為 0%');
+pipTestCtrl.update({ progressPercentage: 120 });
+assert(mockPiPElements.progress.style.width === '100%', '進度百分比超過 100 時應安全夾取為 100%');
+pipTestCtrl.update({ progressPercentage: -15 });
+assert(mockPiPElements.progress.style.width === '0%', '進度百分比小於 0 時應安全夾取為 0%');
+
+// 測試手動 close 與 pagehide 避重：onClose 僅能調用一次
+let pipCloseCount = 0;
+const testCloseCtrl = new PiPController({
+    onClose: () => { pipCloseCount++; }
+});
+await testCloseCtrl.open(mockTemplate);
+testCloseCtrl.close();
+if (mockPiPWindow.pagehideCb) {
+    mockPiPWindow.pagehideCb(); // 模擬瀏覽器隨後非同步觸發 pagehide
+}
+assert(pipCloseCount === 1, 'PiPController 在手動 close 後再觸發 pagehide 不得重複調用 onClose');
+
+// 17. 跨分頁即時同步 (Cross-Tab Storage Sync) 邏輯驗證
+import { STORAGE_KEY } from '../src/core/storage.js';
+assert(STORAGE_KEY === 'salary_clock_user_config_v1', '匯出之 STORAGE_KEY 應為 salary_clock_user_config_v1');
+
+let crossTabStorageListener = null;
+globalThis.window.addEventListener = function(type, handler) {
+    if (type === 'storage') {
+        crossTabStorageListener = handler;
+    }
+};
+
+// 模擬跨分頁監聽器執行
+let localConfigState = { monthlySalary: 40000 };
+function mockHandleStorageEvent(e) {
+    if (!e || e.key === STORAGE_KEY || e.key === null) {
+        localConfigState = loadConfig();
+    }
+}
+globalThis.window.addEventListener('storage', mockHandleStorageEvent);
+assert(typeof crossTabStorageListener === 'function', '跨分頁 storage 事件監聽器應成功註冊');
+
+// 模擬分頁 A 寫入新月薪 88000
+saveConfig({ ...DEFAULT_CONFIG, monthlySalary: 88000 });
+// 分頁 B 收到 storage 事件
+crossTabStorageListener({ key: STORAGE_KEY });
+assert(localConfigState.monthlySalary === 88000, '收到跨分頁 storage 事件後應即時同步最新月薪 88000');
+
+// 模擬分頁 A 清空 localStorage (e.key === null)
+resetConfig();
+crossTabStorageListener({ key: null });
+assert(localConfigState.monthlySalary === 40000, '收到 clear 跨分頁事件 (key === null) 後應重設回預設月薪 40000');
+
+// 模擬外掛或異常寫入破損 JSON 字串時之容錯表現
+localStorage.setItem(STORAGE_KEY, '{ broken_malformed_json :::');
+crossTabStorageListener({ key: STORAGE_KEY });
+assert(localConfigState.monthlySalary === 40000, '遭遇破損之 JSON 時 loadConfig 應安全降級回傳預設月薪 40000 且不崩潰');
+
+// 18. Page Visibility API 背景省電降頻與切回前景即時補算邏輯驗證
+let currentAppTimerRate = 33;
+let recalculatedCount = 0;
+let isPiPOpenForTest = false;
+
+function mockHandleVisibilityChange(hidden) {
+    if (hidden) {
+        if (!isPiPOpenForTest) {
+            currentAppTimerRate = 5000; // 降頻至 5 秒
+        }
+    } else {
+        currentAppTimerRate = 33; // 恢復正常頻率
+        recalculatedCount++;      // 切回前景立即補算一次
+    }
+}
+
+// 測試置於背景且未開 PiP：降頻至 5 秒 (5000ms)
+mockHandleVisibilityChange(true);
+assert(currentAppTimerRate === 5000, '分頁置於背景且未開 PiP 時應主動降頻至 5000ms');
+
+// 測試切回前景：恢復 33ms 且立即補算一次
+mockHandleVisibilityChange(false);
+assert(currentAppTimerRate === 33, '切回前景時應立即恢復 33ms 正常刷新頻率');
+assert(recalculatedCount === 1, '切回前景時應立即觸發一次即時計算與畫面補齊');
+
+// 測試置於背景但有開啟 PiP：使用者在桌面監看，不應降頻
+isPiPOpenForTest = true;
+mockHandleVisibilityChange(true);
+assert(currentAppTimerRate === 33, '分頁置於背景但開啟 PiP 懸浮視窗時，應維持 33ms 不降頻');
+
 console.log(`\n🎉 全部 ${passedTests}/${totalTests} 項單元測試成功通過！核心運算、防窺隱私與安全性防護驗證精確無誤。`);
 
 

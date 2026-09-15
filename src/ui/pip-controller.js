@@ -12,6 +12,7 @@ export class PiPController {
      */
     constructor(options = {}) {
         this.pipWindow = null;
+        this.cachedElements = null;
         this.onClose = options.onClose || (() => {});
         this.onToggleBossKey = options.onToggleBossKey || (() => {});
     }
@@ -87,16 +88,30 @@ export class PiPController {
             clone.id = 'pip-hud-container';
             this.pipWindow.document.body.appendChild(clone);
 
+            // DOM 快取最佳化：快取 6 個關鍵子元素節點引用，供 33ms 高頻率 update() 直接賦值，
+            // 徹底消除每秒 180 次 (6次 × 30fps) 之跨視窗 querySelector 走訪與 DOM 搜尋開銷
+            this.cachedElements = {
+                amountEl: this.pipWindow.document.querySelector('.pip-amount'),
+                rateEl: this.pipWindow.document.querySelector('.pip-rate'),
+                statusEl: this.pipWindow.document.querySelector('.pip-status'),
+                progressBar: this.pipWindow.document.querySelector('.pip-progress-fill'),
+                countdownEl: this.pipWindow.document.querySelector('.pip-countdown'),
+                rewardEl: this.pipWindow.document.querySelector('.pip-reward') || this.pipWindow.document.getElementById('pip-reward-text')
+            };
+
             // 監聽 PiP 視窗內任何位置點擊皆可切換防窺隱藏/顯示
             this.pipWindow.document.addEventListener('click', (e) => {
                 e.preventDefault();
                 this.onToggleBossKey();
             });
 
-            // 監聽視窗關閉事件
+            // 監聽視窗關閉事件（確保僅在視窗物件存在時觸發單次清理，防範與手動 close 產生重複回呼）
             this.pipWindow.addEventListener('pagehide', () => {
-                this.pipWindow = null;
-                this.onClose();
+                if (this.pipWindow) {
+                    this.pipWindow = null;
+                    this.cachedElements = null;
+                    this.onClose();
+                }
             });
 
         } catch (err) {
@@ -105,34 +120,52 @@ export class PiPController {
     }
 
     /**
-     * 同步更新 PiP 小視窗內的顯示內容
+     * 同步更新 PiP 小視窗內的顯示內容（採用 DOM 快取節點與髒檢查賦值）
      * @param {Object} displayData - 格式化後的文字與狀態資料
      */
     update(displayData) {
-        if (!this.isOpen() || !this.pipWindow.document) return;
+        if (!this.isOpen() || !this.pipWindow?.document || !this.cachedElements || !displayData) return;
 
         const pipDoc = this.pipWindow.document;
+        const pipBody = pipDoc.body;
 
-        // 同步 body 的防窺 class
-        if (displayData.isDisguised) {
-            pipDoc.body.classList.add('is-disguised');
-        } else {
-            pipDoc.body.classList.remove('is-disguised');
+        // 同步 body 的防窺 class（髒檢查：僅在狀態變更時操作 classList）
+        if (pipBody) {
+            const hasDisguised = pipBody.classList.contains('is-disguised');
+            if (displayData.isDisguised && !hasDisguised) {
+                pipBody.classList.add('is-disguised');
+            } else if (!displayData.isDisguised && hasDisguised) {
+                pipBody.classList.remove('is-disguised');
+            }
         }
 
-        const amountEl = pipDoc.querySelector('.pip-amount');
-        const rateEl = pipDoc.querySelector('.pip-rate');
-        const statusEl = pipDoc.querySelector('.pip-status');
-        const progressBar = pipDoc.querySelector('.pip-progress-fill');
-        const countdownEl = pipDoc.querySelector('.pip-countdown');
-        const rewardEl = pipDoc.querySelector('.pip-reward') || pipDoc.getElementById('pip-reward-text');
+        // 直接透過快取的 6 個元素節點引用進行更新，並搭配髒檢查比對，避免觸發不必要的 DOM 異動
+        const { amountEl, rateEl, statusEl, progressBar, countdownEl, rewardEl } = this.cachedElements;
 
-        if (amountEl) amountEl.textContent = displayData.formattedAmount;
-        if (rateEl) rateEl.textContent = displayData.formattedRate;
-        if (statusEl) statusEl.textContent = displayData.statusText;
-        if (progressBar) progressBar.style.width = `${displayData.progressPercentage}%`;
-        if (countdownEl) countdownEl.textContent = displayData.countdownText;
-        if (rewardEl && displayData.rewardText !== undefined) rewardEl.textContent = displayData.rewardText;
+        if (amountEl && amountEl.textContent !== displayData.formattedAmount) {
+            amountEl.textContent = displayData.formattedAmount;
+        }
+        if (rateEl && rateEl.textContent !== displayData.formattedRate) {
+            rateEl.textContent = displayData.formattedRate;
+        }
+        if (statusEl && statusEl.textContent !== displayData.statusText) {
+            statusEl.textContent = displayData.statusText;
+        }
+        if (progressBar) {
+            // 防禦性夾取數值區間 0% ~ 100%，消除 NaN 或溢位例外
+            const rawPercent = Number(displayData.progressPercentage);
+            const clampedPercent = Number.isFinite(rawPercent) ? Math.min(100, Math.max(0, rawPercent)) : 0;
+            const targetWidth = `${clampedPercent}%`;
+            if (progressBar.style.width !== targetWidth) {
+                progressBar.style.width = targetWidth;
+            }
+        }
+        if (countdownEl && countdownEl.textContent !== displayData.countdownText) {
+            countdownEl.textContent = displayData.countdownText;
+        }
+        if (rewardEl && displayData.rewardText !== undefined && rewardEl.textContent !== displayData.rewardText) {
+            rewardEl.textContent = displayData.rewardText;
+        }
     }
 
     /**
@@ -140,8 +173,13 @@ export class PiPController {
      */
     close() {
         if (this.pipWindow) {
-            this.pipWindow.close();
+            const win = this.pipWindow;
+            // 立即解除引用以防 pagehide 事件重複調用 onClose
             this.pipWindow = null;
+            this.cachedElements = null;
+            try {
+                win.close();
+            } catch (_) {}
             this.onClose();
         }
     }
