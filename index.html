@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>薪資時鐘 (Salary Clock) - 將每一秒轉化為看得見的價值</title>
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>💰</text></svg>">
+    <link rel="icon" id="app-favicon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>💰</text></svg>">
     <link rel="stylesheet" href="src/ui/styles.css">
     <meta name="theme-color" content="#0c0f17">
 </head>
@@ -88,7 +88,7 @@
                 <div class="progress-row">
                     <div class="progress-info">
                         <span class="progress-label" id="hero-progress-label">今日工時進度</span>
-                        <span class="progress-val tabular-nums" id="hero-progress-percent">0.0%</span>
+                        <span class="progress-val tabular-nums disguise-target" id="hero-progress-percent">0.0%</span>
                     </div>
                     <div class="progress-track">
                         <div class="progress-fill progress-fill-today" id="hero-progress-fill"></div>
@@ -96,8 +96,8 @@
                 </div>
             </div>
 
-            <!-- 2. 趣味激勵指標卡片（無條件捨去戰利品收集牆） -->
-            <div class="reward-card" id="reward-card">
+            <!-- 2. 趣味激勵指標卡片（無條件捨去戰利品收集牆，防窺時亦加入遮蔽防範反推薪資） -->
+            <div class="reward-card disguise-target" id="reward-card">
                 <div class="reward-header">
                     <div class="reward-title-group">
                         <span class="reward-icon" id="reward-icon">☕</span>
@@ -121,7 +121,7 @@
         <!-- 3. 下方三維度卡片：本日、本週、本月（點擊切換上方英雄卡展示） -->
         <section class="period-stats-grid">
             <!-- 卡片 1：本日累積 -->
-            <div class="stat-card clickable-card active" id="card-period-today" title="點擊切換上方展示本日累積">
+            <div class="stat-card clickable-card active" id="card-period-today" role="button" tabindex="0" aria-pressed="true" title="點擊切換上方展示本日累積 (或按 Enter / 空白鍵)">
                 <div class="stat-card-header">
                     <span class="stat-card-title"><span>☀️</span> 本日累積</span>
                     <span class="view-indicator" id="ind-today">● 聚焦中</span>
@@ -130,7 +130,7 @@
                 <div class="card-progress-wrap">
                     <div class="progress-info">
                         <span class="progress-label">今日進度</span>
-                        <span class="progress-val tabular-nums" id="today-card-percent">0.0%</span>
+                        <span class="progress-val tabular-nums disguise-target" id="today-card-percent">0.0%</span>
                     </div>
                     <div class="progress-track">
                         <div class="progress-fill progress-fill-today" id="today-card-fill"></div>
@@ -139,7 +139,7 @@
             </div>
 
             <!-- 卡片 2：本週累積 -->
-            <div class="stat-card clickable-card" id="card-period-week" title="點擊切換上方展示本週累積">
+            <div class="stat-card clickable-card" id="card-period-week" role="button" tabindex="0" aria-pressed="false" title="點擊切換上方展示本週累積 (或按 Enter / 空白鍵)">
                 <div class="stat-card-header">
                     <span class="stat-card-title"><span>📅</span> 本週累積</span>
                     <span class="view-indicator" id="ind-week" style="display: none;">● 聚焦中</span>
@@ -148,7 +148,7 @@
                 <div class="card-progress-wrap">
                     <div class="progress-info">
                         <span class="progress-label">本週進度</span>
-                        <span class="progress-val tabular-nums" id="week-card-percent">0.0%</span>
+                        <span class="progress-val tabular-nums disguise-target" id="week-card-percent">0.0%</span>
                     </div>
                     <div class="progress-track">
                         <div class="progress-fill progress-fill-week" id="week-card-fill"></div>
@@ -157,7 +157,7 @@
             </div>
 
             <!-- 卡片 3：本月累積 -->
-            <div class="stat-card clickable-card" id="card-period-month" title="點擊切換上方展示本月累積">
+            <div class="stat-card clickable-card" id="card-period-month" role="button" tabindex="0" aria-pressed="false" title="點擊切換上方展示本月累積 (或按 Enter / 空白鍵)">
                 <div class="stat-card-header">
                     <span class="stat-card-title"><span>🗓️</span> 本月累積</span>
                     <span class="view-indicator" id="ind-month" style="display: none;">● 聚焦中</span>
@@ -166,7 +166,7 @@
                 <div class="card-progress-wrap">
                     <div class="progress-info">
                         <span class="progress-label">本月進度</span>
-                        <span class="progress-val tabular-nums" id="month-card-percent">0.0%</span>
+                        <span class="progress-val tabular-nums disguise-target" id="month-card-percent">0.0%</span>
                     </div>
                     <div class="progress-track">
                         <div class="progress-fill progress-fill-month" id="month-card-fill"></div>
@@ -196,12 +196,12 @@
         <p>🕒 薪資時鐘 (Salary Clock) · 歡迎前往 <a href="https://github.com/carbeso/salary-clock" target="_blank" rel="noopener noreferrer">GitHub (carbeso/salary-clock)</a> 自由 Fork 與修改</p>
     </footer>
 
-    <!-- 設定抽屜 (Settings Drawer) - 單欄自適應防橫條排版 -->
+    <!-- 設定抽屜 (Settings Drawer) - 單欄自適應防橫條排版，支援 ARIA 無障礙與焦點陷阱 -->
     <div class="drawer-backdrop" id="drawer-backdrop">
-        <div class="drawer">
+        <div class="drawer" role="dialog" aria-modal="true" aria-labelledby="drawer-title">
             <div class="drawer-header">
-                <h2 class="drawer-title">⚙️ 偏好設定</h2>
-                <button class="drawer-close" id="btn-drawer-close">&times;</button>
+                <h2 class="drawer-title" id="drawer-title">⚙️ 偏好設定</h2>
+                <button class="drawer-close" id="btn-drawer-close" aria-label="關閉偏好設定">&times;</button>
             </div>
 
             <div class="drawer-body">

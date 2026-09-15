@@ -74,3 +74,19 @@ export function formatPercentage(percentage, decimals = 1) {
     const clamped = Math.min(100, Math.max(0, Number(percentage) || 0));
     return `${clamped.toFixed(decimals)}%`;
 }
+
+/**
+ * HTML 字串跳脫防護函式，防範 XSS 跨站腳本攻擊
+ * 將 HTML 特殊字元替換為對應的 HTML 實體 (HTML Entities)
+ * @param {string} str - 待處理之字串
+ * @returns {string} 跳脫後的安全字串
+ */
+export function escapeHTML(str) {
+    if (str == null) return '';
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}

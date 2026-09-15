@@ -434,6 +434,15 @@ body {
     transition: width 0.4s ease;
 }
 
+/* 效能最佳化：消除 33ms 高頻跳動下 transition 動畫頻繁中斷造成的強制重排 (Layout Reflow) 與卡頓
+   當進度條帶有 .no-transition 或處於高速滾動模式 / PiP 模式時，立即停用 transition */
+.progress-fill.no-transition,
+.reward-progress-fill.no-transition,
+.pip-progress-fill.no-transition,
+body.pip-mode-active .pip-progress-fill {
+    transition: none !important;
+}
+
 .progress-fill-today {
     background: linear-gradient(90deg, var(--accent-indigo) 0%, var(--accent-emerald) 100%);
     box-shadow: 0 0 8px rgba(16, 185, 129, 0.4);
@@ -573,6 +582,12 @@ body {
     box-shadow: 0 0 16px rgba(99, 102, 241, 0.28);
 }
 
+/* 鍵盤導覽聚焦外框 (無障礙 a11y 支援) */
+.clickable-card:focus-visible {
+    outline: 2px solid var(--accent-indigo);
+    outline-offset: 3px;
+}
+
 .stat-card-header {
     display: flex;
     justify-content: space-between;
@@ -642,13 +657,16 @@ body {
     z-index: 100;
     opacity: 0;
     pointer-events: none;
-    transition: opacity 0.25s ease;
+    /* 加入 visibility 過渡：抽屜關閉時徹底從無障礙樹與 Tab 焦點順序中隱藏，杜絕背景 Tab 穿透 */
+    visibility: hidden;
+    transition: opacity 0.25s ease, visibility 0.25s ease;
     overflow: hidden;
 }
 
 .drawer-backdrop.active {
     opacity: 1;
     pointer-events: auto;
+    visibility: visible;
 }
 
 .drawer {
@@ -918,9 +936,12 @@ body.pip-mode-active.is-disguised .pip-bottom-row {
 
 /* 2. 智慧型手機尺寸 (<= 640px) */
 @media (max-width: 640px) {
-    /* 頁首：手機不支援桌面畫中畫，隱藏懸浮按鈕以留出足夠空間，按鈕文字與間距精緻化 */
-    #btn-pip {
-        display: none !important;
+    /* 頁首：直式手機全螢幕入口自適應精簡佈局（僅顯示圖示，留出空間並方便點選切換全螢幕時鐘） */
+    .header-actions #btn-pip .btn-text {
+        display: none;
+    }
+    .header-actions #btn-pip {
+        padding: 6px 9px;
     }
     .header {
         padding: 10px 12px;
