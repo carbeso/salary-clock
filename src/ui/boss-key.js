@@ -128,6 +128,11 @@ export class BossKeyController {
                 return;
             }
 
+            // 若目前處於全螢幕展示狀態，使用者按 Escape 優先由瀏覽器退出全螢幕，不誤觸老闆鍵
+            if (typeof document !== 'undefined' && document.fullscreenElement && e.key === 'Escape') {
+                return;
+            }
+
             if (e.key === 'b' || e.key === 'B' || e.key === 'Escape') {
                 this.toggle();
             }

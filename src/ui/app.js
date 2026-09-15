@@ -9,8 +9,7 @@ import {
     formatCurrency,
     formatDurationChinese,
     formatStopwatch,
-    formatPercentage,
-    escapeHTML
+    formatPercentage
 } from '../utils/formatters.js';
 import { BossKeyController } from './boss-key.js';
 import { PiPController } from './pip-controller.js';
@@ -726,16 +725,28 @@ class SalaryClockApp {
 
         const template = this.dom.pipHudTemplate.content.cloneNode(true);
         await this.pipController.toggle(template);
-
-        if (this.pipController.isOpen()) {
-            this.dom.btnPip.innerHTML = '<span>✕</span> 關閉懸浮';
-        } else {
-            this.dom.btnPip.innerHTML = '<span>📌</span> 桌面懸浮';
-        }
+        this.updatePipButtonState(this.pipController.isOpen());
     }
 
     handlePiPClose() {
-        this.dom.btnPip.innerHTML = '<span>📌</span> 桌面懸浮';
+        this.updatePipButtonState(false);
+    }
+
+    /**
+     * 更新懸浮按鈕圖示與文字（保留節點引用，避免 innerHTML 破壞 DOM 快取）
+     * @param {boolean} isOpen - 懸浮視窗是否處於開啟狀態
+     */
+    updatePipButtonState(isOpen) {
+        if (!this.dom.btnPip) return;
+
+        // 若子元素存在，直接安全更新 textContent
+        if (this.dom.pipBtnIcon && this.dom.pipBtnText) {
+            this.dom.pipBtnIcon.textContent = isOpen ? '✕' : '📌';
+            this.dom.pipBtnText.textContent = isOpen ? ' 關閉懸浮' : ' 桌面懸浮';
+        } else {
+            // 後備降級處理
+            this.dom.btnPip.textContent = isOpen ? '✕ 關閉懸浮' : '📌 桌面懸浮';
+        }
     }
 
     /**
