@@ -136,10 +136,15 @@ export function calculateContinuousMode(config, now = new Date()) {
         // 今日起算時間 (今日 00:00:00)
         const startOfDayMs = new Date(year, month, now.getDate(), 0, 0, 0, 0).getTime();
 
-        // 本週起算時間 (週一 00:00:00)
+        // 本週起算時間 (週一 00:00:00) 與結束時間 (週日 24:00:00 即下週一 00:00:00)
         const dayOfWeek = now.getDay();
         const diffToMonday = now.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1);
         const startOfWeekMs = new Date(year, month, diffToMonday, 0, 0, 0, 0).getTime();
+        const endOfWeekMs = new Date(year, month, diffToMonday + 7, 0, 0, 0, 0).getTime();
+
+        // 若本週跨月進入新的一個月 (startOfWeekMs < startOfMonthMs)，起算點對齊新月份第一天 (1 日 00:00:00)
+        const effectiveStartOfWeekMs = Math.max(startOfWeekMs, startOfMonthMs);
+        const totalWeekSeconds = Math.max(1, (endOfWeekMs - effectiveStartOfWeekMs) / 1000);
 
         cached = {
             key,
@@ -149,7 +154,9 @@ export function calculateContinuousMode(config, now = new Date()) {
             totalSeconds,
             ratePerSecond,
             startOfDayMs,
-            startOfWeekMs
+            startOfWeekMs,
+            effectiveStartOfWeekMs,
+            totalWeekSeconds
         };
         continuousMemoCache = cached;
     } else {
@@ -170,11 +177,12 @@ export function calculateContinuousMode(config, now = new Date()) {
     const todayEarned = todayElapsedSeconds * cached.ratePerSecond;
     const todayProgress = (todayElapsedSeconds / 86400) * 100;
 
-    // 本週數據
-    const weekElapsedSeconds = Math.max(0, (nowMs - cached.startOfWeekMs) / 1000);
-    const totalWeekSeconds = 7 * 86400;
+    // 本週數據 (若跨月進新月份，從當月 1 日開始累計經過秒數)
+    const weekElapsedSeconds = Math.min(cached.totalWeekSeconds, Math.max(0, (nowMs - cached.effectiveStartOfWeekMs) / 1000));
     const weekEarned = weekElapsedSeconds * cached.ratePerSecond;
-    const weekProgress = Math.min(100, (weekElapsedSeconds / totalWeekSeconds) * 100);
+    const weekProgress = cached.totalWeekSeconds > 0
+        ? Math.min(100, (weekElapsedSeconds / cached.totalWeekSeconds) * 100)
+        : 0;
 
     // 多元趣味指標
     const reward = getRewardTargetInfo(config);
@@ -394,7 +402,8 @@ export function calculateWorkdayMode(config, now = new Date()) {
         totalWorkDaysInMonth: cached.totalWorkDaysInMonth,
         pastWorkDaysCount: cached.pastWorkDaysCount,
         totalWeekWorkDays: cached.totalWeekWorkDays,
-        pastWeekWorkDays: cached.pastWeekWorkDays
+        pastWeekWorkDays: cached.pastWeekWorkDays,
+        regularWeekWorkDays: (Array.isArray(config.workDays) && config.workDays.length > 0) ? config.workDays.length : 5
     };
 }
 

@@ -946,6 +946,65 @@ assert(mockSetupDeviceFeatures(false, 375).mode === 'fullscreen', '桌機模擬 
 assert(mockSetupDeviceFeatures(false, 1024).icon === '📌', '寬螢幕桌機環境應維持 📌 桌面懸浮圖示');
 assert(mockSetupDeviceFeatures(false, 1024).mode === 'pip', '寬螢幕桌機環境應維持桌面畫中畫模式');
 
+// ==========================================
+// 20. 跨月進入新月份之本週累計起算測試 (GitHub Issue #2)
+// ==========================================
+
+// 20.1 工作日模式：跨月第一天 (2026-10-01 週四)
+const crossMonthOct1 = new Date(2026, 9, 1, 10, 0, 0); // 10 月 1 日 10:00 (上班 1 小時)
+const weekInfoOct1 = getWeekWorkDaysInfo(crossMonthOct1, [1, 2, 3, 4, 5]);
+assert(weekInfoOct1.totalWeekWorkDays === 2, '2026-10-01 進新月份時，本週在該月的工作天數應為 2 天 (10/1, 10/2)');
+assert(weekInfoOct1.pastWeekWorkDays === 0, '2026-10-01 當天為新月份首日，本週過去工作天數應排除上個月並歸零為 0');
+
+clearEngineCache();
+const salaryConfigOct = {
+    monthlySalary: 40000,
+    workDays: [1, 2, 3, 4, 5],
+    workStart: '09:00',
+    workEnd: '18:00',
+    breakEnabled: true,
+    breakStart: '12:00',
+    breakEnd: '13:00'
+};
+const resWorkdayOct1 = calculateWorkdayMode(salaryConfigOct, crossMonthOct1);
+assert(Math.abs(resWorkdayOct1.weekEarned - resWorkdayOct1.monthEarned) < 0.001, '跨月第一天 (10/1) 上午上班時，本週累計薪資應精確等於本月累計薪資 (皆為今日賺取金額)');
+assert(resWorkdayOct1.totalWeekWorkDays === 2, '核心運算回傳之 totalWeekWorkDays 應為 2 天');
+assert(resWorkdayOct1.pastWeekWorkDays === 0, '核心運算回傳之 pastWeekWorkDays 應為 0 天');
+assert(resWorkdayOct1.regularWeekWorkDays === 5, '核心運算回傳之 regularWeekWorkDays 常規工作天數應維持 5 天');
+
+// 20.2 工作日模式：跨月第二天 (2026-10-02 週五) 下班
+const crossMonthOct2Evening = new Date(2026, 9, 2, 18, 0, 0); // 10 月 2 日 18:00 (下班)
+const weekInfoOct2 = getWeekWorkDaysInfo(crossMonthOct2Evening, [1, 2, 3, 4, 5]);
+assert(weekInfoOct2.totalWeekWorkDays === 2, '2026-10-02 本週總工作天數仍應維持新月份之 2 天');
+assert(weekInfoOct2.pastWeekWorkDays === 1, '2026-10-02 當天之前在新月份已過工作天數應為 1 天 (10/1)');
+
+clearEngineCache();
+const resWorkdayOct2 = calculateWorkdayMode(salaryConfigOct, crossMonthOct2Evening);
+assert(resWorkdayOct2.weekProgress === 100, '新月份首週週五下班時，本週工作進度應圓滿達到 100%');
+const expectedTwoDaysSalary = resWorkdayOct2.todayEarned * 2;
+assert(Math.abs(resWorkdayOct2.weekEarned - expectedTwoDaysSalary) < 0.01, '新月份首週週五下班時，本週累計薪資應精確為 2 天日薪');
+
+// 20.3 工作日模式：尚未進新月份之月末 (2026-09-30 週三)
+const monthEndSep30 = new Date(2026, 8, 30, 18, 0, 0); // 9 月 30 日 18:00 (下班)
+const weekInfoSep30 = getWeekWorkDaysInfo(monthEndSep30, [1, 2, 3, 4, 5]);
+assert(weekInfoSep30.totalWeekWorkDays === 5, '9 月 30 日尚未進入新月份，整週常規總工作天數應維持 5 天');
+assert(weekInfoSep30.pastWeekWorkDays === 2, '9 月 30 日下班時，當週在今日之前已過工作天應為 2 天 (9/28, 9/29)');
+
+// 20.4 工作日模式：跨年進入 1 月 (2027-01-01 週五)
+const newYearJan1 = new Date(2027, 0, 1, 10, 0, 0); // 2027-01-01 週五
+const weekInfoJan1 = getWeekWorkDaysInfo(newYearJan1, [1, 2, 3, 4, 5]);
+assert(weekInfoJan1.totalWeekWorkDays === 1, '跨年首日 2027-01-01 週五，本週在 1 月之總工作天應為 1 天 (1/1)');
+assert(weekInfoJan1.pastWeekWorkDays === 0, '跨年首日 2027-01-01，上年度 12 月工作天應被排除，pastWeekWorkDays 應為 0');
+
+// 20.5 連續制模式：跨月進新月份 (2026-10-01 10:00:00)
+clearEngineCache();
+const resContinuousOct1 = calculateContinuousMode({ monthlySalary: 40000 }, crossMonthOct1);
+assert(Math.abs(resContinuousOct1.weekEarned - resContinuousOct1.monthEarned) < 0.001, '連續制模式在跨月首日，本週累計薪資應精確等於本月累計薪資');
+assert(resContinuousOct1.weekProgress > 0 && resContinuousOct1.weekProgress < 100, '連續制首日進度應依據當月首週至週日總時長正常推進');
+
+// 20.6 app.js 每週換算參考邏輯防縮水檢驗
+assert(appJsContent.includes("regularDays = result.regularWeekWorkDays ||"), 'app.js 必須採用常態工作天數計算固定工時每週換算參考，避免跨月縮短週時每週基準縮水');
+
 console.log(`\n🎉 全部 ${passedTests}/${totalTests} 項單元測試成功通過！核心運算、防窺隱私、效能快取與無障礙體驗驗證精確無誤。`);
 
 
