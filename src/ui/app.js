@@ -716,7 +716,9 @@ class SalaryClockApp {
             const minRate = secRate * 60;
             const hourRate = secRate * 3600;
             const dailyRate = result.totalDailySeconds ? (result.totalDailySeconds * secRate) : (hourRate * 8);
-            const weeklyRate = dailyRate * (result.totalWeekWorkDays || 5);
+            // 換算參考之每週基準工資：採用常態一週工作天數 (regularWeekWorkDays)，避免跨月縮短週時基準縮水
+            const regularDays = result.regularWeekWorkDays || (Array.isArray(this.config.workDays) && this.config.workDays.length > 0 ? this.config.workDays.length : 5);
+            const weeklyRate = dailyRate * regularDays;
 
             if (this.dom.rateSecFixed) this.dom.rateSecFixed.textContent = `${formatCurrency(secRate, symbol, 4, false)}`;
             if (this.dom.rateMinFixed) this.dom.rateMinFixed.textContent = `${formatCurrency(minRate, symbol, 2)}`;

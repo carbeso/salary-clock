@@ -75,6 +75,9 @@ export function getMondayOfWeek(date) {
 
 /**
  * 計算當週的總工作天數以及截至今天之前的本週已過工作天數
+ * 若本週跨月且當前時間已進入新的一個月，依據業務規則本週累計薪資應從新月份 (1 號) 開始起算，
+ * 自動排除上個月的日期，防範上月已過工作日被重複計入新月份薪資。
+ * 
  * @param {Date} now - 當前日期
  * @param {number[]} workDays - 工作日設定（預設 [1, 2, 3, 4, 5]）
  * @returns {{ totalWeekWorkDays: number, pastWeekWorkDays: number }}
@@ -84,12 +87,23 @@ export function getWeekWorkDaysInfo(now = new Date(), workDays = [1, 2, 3, 4, 5]
     let totalWeekWorkDays = 0;
     let pastWeekWorkDays = 0;
 
-    const todayDateKey = `${now.getFullYear()}-${now.getMonth()}-${now.getDate()}`;
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth();
+    const todayDateKey = `${currentYear}-${currentMonth}-${now.getDate()}`;
+    const startOfMonth = new Date(currentYear, currentMonth, 1, 0, 0, 0, 0);
+
+    // 判定本週是否跨月且當前時間已進入新的一個月 (即本週週一屬於上個月)
+    const isEnteringNewMonth = monday.getTime() < startOfMonth.getTime();
 
     // 遍歷本週 7 天 (週一至週日)
     for (let i = 0; i < 7; i++) {
         const currentDay = new Date(monday);
         currentDay.setDate(monday.getDate() + i);
+
+        // 若本週已跨入新的一個月，則上個月的日期不計入本週新月份的工作天與過去累積天數
+        if (isEnteringNewMonth && currentDay.getTime() < startOfMonth.getTime()) {
+            continue;
+        }
 
         const isWorking = isWorkDay(currentDay, workDays);
         if (isWorking) {
