@@ -127,8 +127,27 @@ class SalaryClockApp {
             cfgBossDisguise: document.getElementById('cfg-boss-disguise'),
 
             // PiP 模板
-            pipHudTemplate: document.getElementById('pip-hud-template')
+            pipHudTemplate: document.getElementById('pip-hud-template'),
+
+            // 帶薪摸魚即時碼錶控制項 (零紀錄、隨開即用)
+            btnPoopBreak: document.getElementById('btn-poop-break'),
+            poopBtnIcon: document.getElementById('poop-btn-icon'),
+            poopBtnText: document.getElementById('poop-btn-text'),
+            poopBanner: document.getElementById('poop-banner'),
+            poopTimeDisplay: document.getElementById('poop-time-display'),
+            poopEarnedDisplay: document.getElementById('poop-earned-display'),
+            btnStopPoop: document.getElementById('btn-stop-poop'),
+            poopModalBackdrop: document.getElementById('poop-modal-backdrop'),
+            poopModalDuration: document.getElementById('poop-modal-duration'),
+            poopModalAmount: document.getElementById('poop-modal-amount'),
+            poopModalRewardHint: document.getElementById('poop-modal-reward-hint'),
+            btnClosePoopModal: document.getElementById('btn-close-poop-modal')
         };
+
+        // 帶薪摸魚狀態 (純記憶體暫存，零本機儲存負擔)
+        this.isPooping = false;
+        this.poopStartTime = null;
+        this.lastCalculatedSalary = null;
 
         // 初始化子模組
         this.bossKey = new BossKeyController({
@@ -197,10 +216,15 @@ class SalaryClockApp {
             }
         });
 
-        // 監聽全域鍵盤事件：在 capture 捕獲階段優先處理抽屜 Escape/Tab 以及全螢幕時鐘 Escape
+        // 監聽全域鍵盤事件：在 capture 捕獲階段優先處理抽屜 Escape/Tab、摸魚彈窗 Escape 以及全螢幕時鐘 Escape
         window.addEventListener('keydown', (e) => {
             if (e.key === 'Escape') {
-                if (this.isSettingsOpen()) {
+                if (this.isPoopModalOpen()) {
+                    // 摸魚戰報開啟時按 Escape 關閉
+                    e.preventDefault();
+                    e.stopImmediatePropagation();
+                    this.closePoopModal();
+                } else if (this.isSettingsOpen()) {
                     // 抽屜開啟時按 Escape 優先關閉抽屜，阻止向後冒泡避免觸發老闆鍵
                     e.preventDefault();
                     e.stopImmediatePropagation();
@@ -328,6 +352,24 @@ class SalaryClockApp {
             this.dom.drawerBackdrop.addEventListener('keydown', (e) => this.handleDrawerKeydown(e));
         }
 
+        // 帶薪摸魚即時碼錶事件綁定 (零紀錄、隨開即用)
+        if (this.dom.btnPoopBreak) {
+            this.dom.btnPoopBreak.addEventListener('click', () => this.togglePoopBreak());
+        }
+        if (this.dom.btnStopPoop) {
+            this.dom.btnStopPoop.addEventListener('click', () => this.stopPoopBreak());
+        }
+        if (this.dom.btnClosePoopModal) {
+            this.dom.btnClosePoopModal.addEventListener('click', () => this.closePoopModal());
+        }
+        if (this.dom.poopModalBackdrop) {
+            this.dom.poopModalBackdrop.addEventListener('click', (e) => {
+                if (e.target === this.dom.poopModalBackdrop) {
+                    this.closePoopModal();
+                }
+            });
+        }
+
         // 頁面可見性變化 (Page Visibility API)：背景省電降頻與切回前景即時補算
         document.addEventListener('visibilitychange', () => this.handleVisibilityChange());
 
@@ -400,10 +442,23 @@ class SalaryClockApp {
      * @param {Date} now - 當前精確時間
      */
     render(result, now) {
+        this.lastCalculatedSalary = result;
         const symbol = this.config.currencySymbol || 'NT$';
         // 僅允許 2 位（按秒跳動）或 4 位（轉動增加）
         const decimals = Number(this.config.decimalDigits) === 4 ? 4 : 2;
         const thousands = this.config.showThousandSeparator !== false;
+
+        // 帶薪摸魚即時碼錶更新 (若摸魚進行中)
+        if (this.isPooping && this.poopStartTime) {
+            const elapsedSec = Math.max(0, Math.floor((now.getTime() - this.poopStartTime) / 1000));
+            const poopEarned = elapsedSec * (result.ratePerSecond || 0);
+            if (this.dom.poopTimeDisplay) {
+                this.dom.poopTimeDisplay.textContent = formatStopwatch(elapsedSec);
+            }
+            if (this.dom.poopEarnedDisplay) {
+                this.dom.poopEarnedDisplay.textContent = formatCurrency(poopEarned, symbol, 2, thousands);
+            }
+        }
 
         // 1. 根據當前選取的維度 (本日 / 本週 / 本月) 決定英雄卡展示金額與進度
         let targetAmount = result.todayEarned;
@@ -1281,6 +1336,119 @@ class SalaryClockApp {
             this.bossKey.setMode(this.config.bossKeyDisguise);
             this.startTickLoop();
             this.closeSettings();
+        }
+    }
+
+    /**
+     * 檢查摸魚戰報彈窗是否正處於開啟狀態
+     */
+    isPoopModalOpen() {
+        return !!(this.dom.poopModalBackdrop && this.dom.poopModalBackdrop.style.display !== 'none');
+    }
+
+    /**
+     * 切換帶薪摸魚碼錶狀態
+     */
+    togglePoopBreak() {
+        if (this.isPooping) {
+            this.stopPoopBreak();
+        } else {
+            this.startPoopBreak();
+        }
+    }
+
+    /**
+     * 開始帶薪摸魚計時
+     */
+    startPoopBreak() {
+        this.isPooping = true;
+        this.poopStartTime = Date.now();
+
+        if (this.dom.btnPoopBreak) {
+            this.dom.btnPoopBreak.classList.add('active');
+        }
+        if (this.dom.poopBtnIcon) {
+            this.dom.poopBtnIcon.textContent = '🛑';
+        }
+        if (this.dom.poopBtnText) {
+            this.dom.poopBtnText.textContent = ' 結束摸魚';
+        }
+        if (this.dom.poopBanner) {
+            this.dom.poopBanner.style.display = 'flex';
+        }
+        if (this.dom.poopTimeDisplay) {
+            this.dom.poopTimeDisplay.textContent = '00:00';
+        }
+        if (this.dom.poopEarnedDisplay) {
+            const symbol = this.config.currencySymbol || 'NT$';
+            this.dom.poopEarnedDisplay.textContent = formatCurrency(0, symbol, 2, this.config.showThousandSeparator !== false);
+        }
+    }
+
+    /**
+     * 結束帶薪摸魚計時並展示白嫖戰報 (純記憶體結算，不寫入任何本機儲存紀錄)
+     */
+    stopPoopBreak() {
+        if (!this.isPooping) return;
+
+        const now = Date.now();
+        const elapsedSec = Math.max(1, Math.floor((now - (this.poopStartTime || now)) / 1000));
+        const rate = (this.lastCalculatedSalary && this.lastCalculatedSalary.ratePerSecond) ? this.lastCalculatedSalary.ratePerSecond : 0;
+        const earned = elapsedSec * rate;
+        const symbol = this.config.currencySymbol || 'NT$';
+        const thousands = this.config.showThousandSeparator !== false;
+
+        // 重設摸魚狀態
+        this.isPooping = false;
+        this.poopStartTime = null;
+
+        if (this.dom.btnPoopBreak) {
+            this.dom.btnPoopBreak.classList.remove('active');
+        }
+        if (this.dom.poopBtnIcon) {
+            this.dom.poopBtnIcon.textContent = '🚽';
+        }
+        if (this.dom.poopBtnText) {
+            this.dom.poopBtnText.textContent = ' 摸魚';
+        }
+        if (this.dom.poopBanner) {
+            this.dom.poopBanner.style.display = 'none';
+        }
+
+        // 填入戰報彈窗內容
+        if (this.dom.poopModalDuration) {
+            this.dom.poopModalDuration.textContent = formatDurationChinese(elapsedSec);
+        }
+        if (this.dom.poopModalAmount) {
+            this.dom.poopModalAmount.textContent = formatCurrency(earned, symbol, 2, thousands);
+        }
+        if (this.dom.poopModalRewardHint) {
+            const reward = this.lastCalculatedSalary ? this.lastCalculatedSalary.rewardInfo : null;
+            if (reward && reward.price > 0) {
+                const count = (earned / reward.price).toFixed(1);
+                this.dom.poopModalRewardHint.textContent = `相當於白賺了 ${count} ${reward.unit}${reward.name} ${reward.icon}`;
+            } else {
+                this.dom.poopModalRewardHint.textContent = '白嫖老闆的每一分錢都閃閃發亮！✨';
+            }
+        }
+
+        if (this.dom.poopModalBackdrop) {
+            this.dom.poopModalBackdrop.style.display = 'flex';
+            if (this.dom.btnClosePoopModal) {
+                this.dom.btnClosePoopModal.focus();
+            }
+        }
+    }
+
+    /**
+     * 關閉摸魚戰報彈窗
+     */
+    closePoopModal() {
+        if (this.dom.poopModalBackdrop) {
+            this.dom.poopModalBackdrop.style.display = 'none';
+        }
+        if (this.dom.btnPoopBreak) {
+            this.dom.btnPoopBreak.focus();
         }
     }
 }
