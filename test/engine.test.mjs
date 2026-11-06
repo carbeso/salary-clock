@@ -1005,6 +1005,23 @@ assert(resContinuousOct1.weekProgress > 0 && resContinuousOct1.weekProgress < 10
 // 20.6 app.js 每週換算參考邏輯防縮水檢驗
 assert(appJsContent.includes("regularDays = result.regularWeekWorkDays ||"), 'app.js 必須採用常態工作天數計算固定工時每週換算參考，避免跨月縮短週時每週基準縮水');
 
+// ==========================================
+// 21. Web Audio 純代碼合成里程碑音效測試
+// ==========================================
+console.log('\n--- 21. Web Audio 里程碑音效測試 ---');
+
+const soundPath = path.resolve(__dirname, '../src/utils/sound.js');
+assert(fs.existsSync(soundPath), 'src/utils/sound.js 音效模組必須存在');
+const soundContent = fs.readFileSync(soundPath, 'utf8');
+assert(soundContent.includes('export function playKaChingSound()'), 'sound.js 必須匯出 playKaChingSound 函式');
+assert(soundContent.includes('AudioContext'), 'sound.js 必須採用純 Web Audio API 合成，零外部音訊檔案依賴');
+
+assert(DEFAULT_CONFIG.soundEnabled === false, 'DEFAULT_CONFIG.soundEnabled 預設值必須為 false (維持辦公室靜音)');
+assert(indexContent.includes('id="cfg-sound-enabled"'), 'index.html 設定抽屜必須包含 #cfg-sound-enabled 切換勾選框');
+assert(appJsContent.includes('playKaChingSound'), 'app.js 必須引入並呼叫 playKaChingSound 函式');
+assert(appJsContent.includes('cfgSoundEnabled'), 'app.js 必須快取 cfgSoundEnabled 控制項');
+assert(appJsContent.includes('this.config.soundEnabled && !isDisguised'), 'app.js 播放音效前必須防範防窺模式（防窺時自動靜音）');
+
 console.log(`\n🎉 全部 ${passedTests}/${totalTests} 項單元測試成功通過！核心運算、防窺隱私、效能快取與無障礙體驗驗證精確無誤。`);
 
 

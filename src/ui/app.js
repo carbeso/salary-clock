@@ -13,6 +13,7 @@ import {
 } from '../utils/formatters.js';
 import { BossKeyController } from './boss-key.js';
 import { PiPController } from './pip-controller.js';
+import { playKaChingSound } from '../utils/sound.js';
 
 class SalaryClockApp {
     constructor() {
@@ -125,10 +126,15 @@ class SalaryClockApp {
             cfgCurrencySymbol: document.getElementById('cfg-currency-symbol'),
             cfgDecimalDigits: document.getElementById('cfg-decimal-digits'),
             cfgBossDisguise: document.getElementById('cfg-boss-disguise'),
+            cfgSoundEnabled: document.getElementById('cfg-sound-enabled'),
 
             // PiP 模板
             pipHudTemplate: document.getElementById('pip-hud-template')
         };
+
+        // 里程碑成就音效觸發快取 (避免初次開啟重複發聲)
+        this.lastMilestoneThousand = null;
+        this.lastRewardUnits = null;
 
         // 初始化子模組
         this.bossKey = new BossKeyController({
@@ -549,6 +555,30 @@ class SalaryClockApp {
         const heroAriaLabel = isDisguised ? '已啟用防窺保護' : formattedHeroAmount;
         if (this.dom.heroAmount && this.dom.heroAmount.getAttribute('aria-label') !== heroAriaLabel) {
             this.dom.heroAmount.setAttribute('aria-label', heroAriaLabel);
+        }
+
+        // 里程碑成就音效觸發 (若有啟用且未處於防窺保護狀態)
+        if (typeof targetAmount === 'number' && !isNaN(targetAmount) && targetAmount > 0) {
+            const currentThousand = Math.floor(targetAmount / 1000);
+            const rewardUnits = result.rewardInfo ? Math.floor(result.rewardInfo.count || 0) : 0;
+
+            if (this.lastMilestoneThousand === null) {
+                // 初次計算時僅記錄初始基準，防範頁面剛打開立即發聲
+                this.lastMilestoneThousand = currentThousand;
+                this.lastRewardUnits = rewardUnits;
+            } else {
+                const reachedNewThousand = currentThousand > this.lastMilestoneThousand;
+                const reachedNewReward = rewardUnits > this.lastRewardUnits;
+
+                if (reachedNewThousand || reachedNewReward) {
+                    this.lastMilestoneThousand = currentThousand;
+                    this.lastRewardUnits = rewardUnits;
+
+                    if (this.config.soundEnabled && !isDisguised) {
+                        playKaChingSound();
+                    }
+                }
+            }
         }
 
         // 針對 33ms 高頻跳動的進度條，動態切換 .no-transition 類別（髒檢查比對，避免每幀重複 toggle）
@@ -1111,6 +1141,9 @@ class SalaryClockApp {
         this.dom.cfgCurrencySymbol.value = this.config.currencySymbol;
         this.dom.cfgDecimalDigits.value = this.config.decimalDigits;
         this.dom.cfgBossDisguise.value = this.config.bossKeyDisguise || 'mask';
+        if (this.dom.cfgSoundEnabled) {
+            this.dom.cfgSoundEnabled.checked = Boolean(this.config.soundEnabled);
+        }
 
         this.updateFormVisibility();
     }
@@ -1254,6 +1287,9 @@ class SalaryClockApp {
         this.config.currencySymbol = this.dom.cfgCurrencySymbol.value.trim() || 'NT$';
         this.config.decimalDigits = Number(this.dom.cfgDecimalDigits.value) || 2;
         this.config.bossKeyDisguise = this.dom.cfgBossDisguise.value;
+        if (this.dom.cfgSoundEnabled) {
+            this.config.soundEnabled = Boolean(this.dom.cfgSoundEnabled.checked);
+        }
 
         // 更新防窺控制器的模式
         this.bossKey.setMode(this.config.bossKeyDisguise);
