@@ -388,6 +388,11 @@ body {
     color: var(--text-primary);
 }
 
+.substat-divider {
+    opacity: 0.35;
+    margin: 0 4px;
+}
+
 /* 碼錶按鈕 */
 .freelance-controls {
     display: flex;
