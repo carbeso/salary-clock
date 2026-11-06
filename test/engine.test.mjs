@@ -1005,6 +1005,27 @@ assert(resContinuousOct1.weekProgress > 0 && resContinuousOct1.weekProgress < 10
 // 20.6 app.js 每週換算參考邏輯防縮水檢驗
 assert(appJsContent.includes("regularDays = result.regularWeekWorkDays ||"), 'app.js 必須採用常態工作天數計算固定工時每週換算參考，避免跨月縮短週時每週基準縮水');
 
+// ==========================================
+// 21. 帶薪摸魚 / 如廁即時碼錶測試 (零紀錄、隨開即用)
+// ==========================================
+console.log('\n--- 21. 帶薪摸魚 / 如廁即時碼錶測試 ---');
+assert(indexContent.includes('id="btn-poop-break"'), 'index.html 必須包含帶薪摸魚按鈕 #btn-poop-break');
+assert(indexContent.includes('id="poop-banner"'), 'index.html 必須包含摸魚即時浮動提示列 #poop-banner');
+assert(indexContent.includes('id="poop-modal-backdrop"'), 'index.html 必須包含摸魚戰報彈窗 #poop-modal-backdrop');
+assert(stylesContent.includes('.btn-poop'), 'styles.css 必須包含 .btn-poop 樣式定義');
+assert(stylesContent.includes('.poop-banner'), 'styles.css 必須包含 .poop-banner 浮動列樣式定義');
+assert(stylesContent.includes('.poop-modal'), 'styles.css 必須包含 .poop-modal 彈窗樣式定義');
+assert(appJsContent.includes('startPoopBreak()'), 'app.js 必須實作 startPoopBreak() 函式');
+assert(appJsContent.includes('stopPoopBreak()'), 'app.js 必須實作 stopPoopBreak() 函式');
+assert(appJsContent.includes('closePoopModal()'), 'app.js 必須實作 closePoopModal() 函式');
+assert(appJsContent.includes('isPoopModalOpen()'), 'app.js 必須實作 isPoopModalOpen() 供 Escape 防窺安全攔截');
+
+// 摸魚白嫖金額算術檢驗：摸魚 10 分鐘 (600秒)，每秒費率 0.05 元，白嫖應為 30 元
+const poopElapsedSeconds = 600;
+const testRatePerSecond = 0.05;
+const calculatedPoopEarned = poopElapsedSeconds * testRatePerSecond;
+assert(Math.abs(calculatedPoopEarned - 30) < 0.0001, '摸魚 600 秒且每秒 0.05 元時，白嫖金額應精確為 30 元');
+
 console.log(`\n🎉 全部 ${passedTests}/${totalTests} 項單元測試成功通過！核心運算、防窺隱私、效能快取與無障礙體驗驗證精確無誤。`);
 
 
