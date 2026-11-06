@@ -1049,7 +1049,34 @@ assert(stylesContent.includes('.substat-divider'), 'styles.css 必須包含 .sub
 assert(appJsContent.includes('cfgPayday'), 'app.js 必須快取 cfgPayday 元素');
 assert(appJsContent.includes('this.config.payday'), 'app.js 必須讀取與儲存 payday 設定');
 
+// 21.7 發薪日噴錢慶祝、Web Audio 音效與防上班尷尬急煞測試
+console.log('\n--- 22. 發薪日噴錢慶祝特效與防上班尷尬急煞測試 ---');
+assert(indexContent.includes('id="payday-celebration-overlay"'), 'index.html 必須包含 #payday-celebration-overlay 特效容器');
+assert(indexContent.includes('id="payday-canvas"'), 'index.html 必須包含 #payday-canvas 金幣雨畫布');
+assert(indexContent.includes('id="btn-close-payday"'), 'index.html 必須包含 #btn-close-payday 立即關閉按鈕');
+assert(indexContent.includes('id="cfg-sound-enabled"'), 'index.html 設定抽屜必須包含 #cfg-sound-enabled 音效開關');
+assert(stylesContent.includes('.payday-celebration-overlay'), 'styles.css 必須包含 .payday-celebration-overlay 遮罩樣式');
+assert(stylesContent.includes('.payday-banner'), 'styles.css 必須包含 .payday-banner 慶祝橫幅樣式');
+assert(stylesContent.includes('.btn-close-payday'), 'styles.css 必須包含 .btn-close-payday 關閉按鈕樣式');
+assert(appJsContent.includes('triggerPaydayCelebration'), 'app.js 必須實作 triggerPaydayCelebration() 觸發噴錢特效');
+assert(appJsContent.includes('stopPaydayCelebration'), 'app.js 必須實作 stopPaydayCelebration() 立即中斷特效');
+assert(appJsContent.includes('stopAllSounds'), 'app.js 必須在急煞中止與防窺切換時調用 stopAllSounds()');
+assert(appJsContent.includes('playPaydayFanfare'), 'app.js 必須整合 playPaydayFanfare Web Audio 合成音效');
+
+// 21.8 聲音模組在無音訊環境（如 Node.js / 測試環境）的容錯性
+const { playPaydayFanfare: testFanfare, stopAllSounds: testStopSounds } = await import('../src/utils/sound.js');
+assert(typeof testFanfare === 'function', 'sound.js 必須匯出 playPaydayFanfare 函式');
+assert(typeof testStopSounds === 'function', 'sound.js 必須匯出 stopAllSounds 函式');
+// 在無音訊驅動環境下呼叫應靜默降級，不拋出錯誤
+testFanfare();
+testStopSounds();
+assert(true, 'sound.js 在無音效驅動之環境下安全呼叫不拋錯');
+
+// 21.9 音效預設設定值檢驗
+assert(DEFAULT_CONFIG.soundEnabled === false, '預設音效開關必須為 false (尊重辦公室安靜環境，零尷尬)');
+
 console.log(`\n🎉 全部 ${passedTests}/${totalTests} 項單元測試成功通過！核心運算、防窺隱私、效能快取與無障礙體驗驗證精確無誤。`);
+
 
 
 

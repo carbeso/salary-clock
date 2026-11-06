@@ -58,6 +58,7 @@ export const DEFAULT_CONFIG = {
     currencySymbol: 'NT$',         // 幣別符號
     decimalDigits: 2,              // 小數點位數 (2~4)
     showThousandSeparator: true,   // 是否顯示千分位
+    soundEnabled: false,           // 音效開關 (里程碑與發薪日慶祝音效，預設靜音)
 
     // 多元趣味激勵指標
     rewardType: 'latte',           // 'latte', 'bigmac', 'etf0050', 'tsmc', 'bubbletea', 'custom'

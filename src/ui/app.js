@@ -13,6 +13,7 @@ import {
 } from '../utils/formatters.js';
 import { BossKeyController } from './boss-key.js';
 import { PiPController } from './pip-controller.js';
+import { playPaydayFanfare, stopAllSounds } from '../utils/sound.js';
 
 class SalaryClockApp {
     constructor() {
@@ -52,6 +53,11 @@ class SalaryClockApp {
             countdownText: document.getElementById('countdown-text'),
             paydayWrapper: document.getElementById('payday-wrapper'),
             paydayText: document.getElementById('payday-text'),
+
+            // 發薪日慶祝噴錢特效與避尷尬急煞
+            paydayCelebrationOverlay: document.getElementById('payday-celebration-overlay'),
+            paydayCanvas: document.getElementById('payday-canvas'),
+            btnClosePayday: document.getElementById('btn-close-payday'),
 
             // 自由接案碼錶操作
             freelanceControls: document.getElementById('freelance-controls'),
@@ -128,6 +134,7 @@ class SalaryClockApp {
             cfgCurrencySymbol: document.getElementById('cfg-currency-symbol'),
             cfgDecimalDigits: document.getElementById('cfg-decimal-digits'),
             cfgBossDisguise: document.getElementById('cfg-boss-disguise'),
+            cfgSoundEnabled: document.getElementById('cfg-sound-enabled'),
 
             // PiP 模板
             pipHudTemplate: document.getElementById('pip-hud-template')
@@ -163,6 +170,13 @@ class SalaryClockApp {
 
         // 無障礙焦點管理：記錄開啟抽屜前聚焦之 DOM 元素以利關閉時還原焦點
         this.previousActiveElement = null;
+
+        // 發薪日慶祝噴錢特效與急煞狀態
+        this.isPaydayCelebrationActive = false;
+        this.paydayCelebratedDate = null;
+        this.paydayAnimFrameId = null;
+        this.paydayCelebrationTimeout = null;
+        this.paydayParticles = [];
 
         this.init();
     }
@@ -203,7 +217,13 @@ class SalaryClockApp {
         // 監聽全域鍵盤事件：在 capture 捕獲階段優先處理抽屜 Escape/Tab 以及全螢幕時鐘 Escape
         window.addEventListener('keydown', (e) => {
             if (e.key === 'Escape') {
-                if (this.isSettingsOpen()) {
+                if (this.isPaydayCelebrationActive) {
+                    // 發薪日慶祝中按 Escape 立即終止慶祝與音效，避免上班尷尬
+                    e.preventDefault();
+                    e.stopImmediatePropagation();
+                    this.stopPaydayCelebration();
+                    return;
+                } else if (this.isSettingsOpen()) {
                     // 抽屜開啟時按 Escape 優先關閉抽屜，阻止向後冒泡避免觸發老闆鍵
                     e.preventDefault();
                     e.stopImmediatePropagation();
@@ -336,6 +356,31 @@ class SalaryClockApp {
 
         // 跨分頁即時同步 (Cross-Tab Real-time Storage Sync)
         window.addEventListener('storage', (e) => this.handleStorageEvent(e));
+
+        // 發薪日慶祝噴錢特效互動與緊急煞車 (點擊任意處立即隱藏避免尷尬)
+        if (this.dom.paydayCelebrationOverlay) {
+            this.dom.paydayCelebrationOverlay.addEventListener('click', () => this.stopPaydayCelebration());
+        }
+        if (this.dom.btnClosePayday) {
+            this.dom.btnClosePayday.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.stopPaydayCelebration();
+            });
+        }
+        if (this.dom.paydayWrapper) {
+            this.dom.paydayWrapper.addEventListener('click', () => {
+                if (this.lastCalculatedSalary && this.lastCalculatedSalary.paydayInfo && this.lastCalculatedSalary.paydayInfo.isPayday) {
+                    this.triggerPaydayCelebration(true);
+                }
+            });
+        }
+
+        // 視窗失焦時立即中止發薪慶祝特效與音效 (切換軟體或 Alt-Tab 即刻靜音避尷尬)
+        window.addEventListener('blur', () => {
+            if (this.isPaydayCelebrationActive) {
+                this.stopPaydayCelebration();
+            }
+        });
     }
 
     /**
@@ -644,12 +689,21 @@ class SalaryClockApp {
                         if (this.dom.paydayText.textContent !== paydayLabel) {
                             this.dom.paydayText.textContent = paydayLabel;
                             this.dom.paydayText.style.color = '#fbbf24';
+                            this.dom.paydayWrapper.classList.add('payday-clickable');
+                            this.dom.paydayWrapper.title = '發薪當日點擊可重播慶祝特效 💰';
+                        }
+                        // 發薪日當日初次載入自動觸發一次慶祝噴錢特效 (非防窺時)
+                        const todayStr = new Date().toDateString();
+                        if (this.paydayCelebratedDate !== todayStr && !this.bossKey.isDisguised) {
+                            this.triggerPaydayCelebration();
                         }
                     } else {
                         const paydayLabel = `${result.paydayInfo.daysRemaining} 天`;
                         if (this.dom.paydayText.textContent !== paydayLabel) {
                             this.dom.paydayText.textContent = paydayLabel;
                             this.dom.paydayText.style.color = '';
+                            this.dom.paydayWrapper.classList.remove('payday-clickable');
+                            this.dom.paydayWrapper.removeAttribute('title');
                         }
                     }
                 }
@@ -811,6 +865,12 @@ class SalaryClockApp {
      */
     handleBossKeyChange(isDisguised, mode) {
         if (isDisguised) {
+            // 防窺啟動：立即中止任何正在進行的發薪噴錢特效與金幣音效
+            if (this.isPaydayCelebrationActive) {
+                this.stopPaydayCelebration();
+            }
+            stopAllSounds();
+
             document.body.classList.add('is-disguised');
             this.dom.bossKeyIcon.textContent = '👁️';
             this.dom.btnBossKey.classList.add('btn-primary');
@@ -991,6 +1051,11 @@ class SalaryClockApp {
         if (typeof document === 'undefined') return;
 
         if (document.hidden) {
+            // 背景時立即終止任何發薪慶祝特效與音效 (杜絕背後默默發聲或吃 CPU)
+            if (this.isPaydayCelebrationActive) {
+                this.stopPaydayCelebration();
+            }
+
             // 分頁切換至背景
             // 檢查是否開著桌面置頂畫中畫視窗 (PiP)
             if (!this.pipController.isOpen()) {
@@ -1145,6 +1210,9 @@ class SalaryClockApp {
         this.dom.cfgCurrencySymbol.value = this.config.currencySymbol;
         this.dom.cfgDecimalDigits.value = this.config.decimalDigits;
         this.dom.cfgBossDisguise.value = this.config.bossKeyDisguise || 'mask';
+        if (this.dom.cfgSoundEnabled) {
+            this.dom.cfgSoundEnabled.checked = this.config.soundEnabled === true;
+        }
 
         this.updateFormVisibility();
     }
@@ -1291,6 +1359,9 @@ class SalaryClockApp {
         this.config.currencySymbol = this.dom.cfgCurrencySymbol.value.trim() || 'NT$';
         this.config.decimalDigits = Number(this.dom.cfgDecimalDigits.value) || 2;
         this.config.bossKeyDisguise = this.dom.cfgBossDisguise.value;
+        if (this.dom.cfgSoundEnabled) {
+            this.config.soundEnabled = this.dom.cfgSoundEnabled.checked;
+        }
 
         // 更新防窺控制器的模式
         this.bossKey.setMode(this.config.bossKeyDisguise);
@@ -1318,6 +1389,137 @@ class SalaryClockApp {
             this.bossKey.setMode(this.config.bossKeyDisguise);
             this.startTickLoop();
             this.closeSettings();
+        }
+    }
+
+    /**
+     * 觸發發薪日噴錢慶祝特效 (Canvas 粒子金幣雨 + Web Audio 賀彩樂音)
+     * @param {boolean} force - 是否強制重播 (例如使用者點擊發薪日標記手動回味)
+     */
+    triggerPaydayCelebration(force = false) {
+        if (typeof window === 'undefined' || !this.dom.paydayCelebrationOverlay || !this.dom.paydayCanvas) return;
+        if (this.bossKey && this.bossKey.isDisguised) return; // 防窺狀態下嚴格禁止觸發任何慶祝特效或聲響
+
+        const todayStr = new Date().toDateString();
+        if (!force && this.paydayCelebratedDate === todayStr) {
+            return;
+        }
+        this.paydayCelebratedDate = todayStr;
+
+        // 若先前已有計時器或動畫，先安全清除
+        this.stopPaydayCelebration(false);
+
+        this.isPaydayCelebrationActive = true;
+        this.dom.paydayCelebrationOverlay.style.display = 'flex';
+        this.dom.paydayCelebrationOverlay.setAttribute('aria-hidden', 'false');
+
+        // 音效播放（若使用者有啟用音效且非防窺）
+        if (this.config.soundEnabled) {
+            playPaydayFanfare();
+        }
+
+        // 初始化 Canvas 粒子動畫
+        const canvas = this.dom.paydayCanvas;
+        const ctx = canvas.getContext ? canvas.getContext('2d') : null;
+        if (!ctx) return;
+
+        const width = canvas.width = window.innerWidth || 800;
+        const height = canvas.height = window.innerHeight || 600;
+
+        const emojis = ['🪙', '💰', '💵', '✨', '🎉'];
+        const particleCount = Math.min(50, Math.max(20, Math.floor(width / 24)));
+        this.paydayParticles = [];
+
+        for (let i = 0; i < particleCount; i++) {
+            this.paydayParticles.push({
+                x: Math.random() * width,
+                y: Math.random() * -height * 0.6,
+                vx: (Math.random() - 0.5) * 3,
+                vy: Math.random() * 3 + 2.5,
+                size: Math.floor(Math.random() * 16 + 20),
+                emoji: emojis[Math.floor(Math.random() * emojis.length)],
+                rotation: Math.random() * 360,
+                rotationSpeed: (Math.random() - 0.5) * 5
+            });
+        }
+
+        const render = () => {
+            if (!this.isPaydayCelebrationActive) return;
+            ctx.clearRect(0, 0, width, height);
+
+            for (const p of this.paydayParticles) {
+                p.x += p.vx;
+                p.y += p.vy;
+                p.rotation += p.rotationSpeed;
+
+                ctx.save();
+                ctx.translate(p.x, p.y);
+                ctx.rotate(p.rotation * Math.PI / 180);
+                ctx.font = `${p.size}px sans-serif`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(p.emoji, 0, 0);
+                ctx.restore();
+
+                // 飄落超過底端時從頂部隨機重置
+                if (p.y > height + 40) {
+                    p.y = -30;
+                    p.x = Math.random() * width;
+                }
+            }
+
+            this.paydayAnimFrameId = requestAnimationFrame(render);
+        };
+
+        if (typeof requestAnimationFrame !== 'undefined') {
+            this.paydayAnimFrameId = requestAnimationFrame(render);
+        }
+
+        // 4.5 秒後自動隱藏結束，避免干擾工作
+        this.paydayCelebrationTimeout = setTimeout(() => {
+            this.stopPaydayCelebration();
+        }, 4500);
+    }
+
+    /**
+     * 立即中斷並關閉發薪慶祝特效（防上班尷尬核心煞車）
+     * 支援點擊任意處、按 Esc、按 B 鍵、分頁切換背景或視窗失焦時立時生效
+     * @param {boolean} resetDate - 是否清除當日已慶祝標記
+     */
+    stopPaydayCelebration(resetDate = false) {
+        this.isPaydayCelebrationActive = false;
+
+        if (this.paydayCelebrationTimeout) {
+            clearTimeout(this.paydayCelebrationTimeout);
+            this.paydayCelebrationTimeout = null;
+        }
+
+        if (this.paydayAnimFrameId) {
+            if (typeof cancelAnimationFrame !== 'undefined') {
+                cancelAnimationFrame(this.paydayAnimFrameId);
+            }
+            this.paydayAnimFrameId = null;
+        }
+
+        if (this.dom.paydayCelebrationOverlay) {
+            this.dom.paydayCelebrationOverlay.style.display = 'none';
+            this.dom.paydayCelebrationOverlay.setAttribute('aria-hidden', 'true');
+        }
+
+        if (this.dom.paydayCanvas) {
+            const ctx = this.dom.paydayCanvas.getContext ? this.dom.paydayCanvas.getContext('2d') : null;
+            if (ctx) {
+                ctx.clearRect(0, 0, this.dom.paydayCanvas.width, this.dom.paydayCanvas.height);
+            }
+        }
+
+        this.paydayParticles = [];
+
+        // 立即斬斷 Web Audio 發聲節點 (急煞靜音)
+        stopAllSounds();
+
+        if (resetDate) {
+            this.paydayCelebratedDate = null;
         }
     }
 }

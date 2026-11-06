@@ -1277,3 +1277,128 @@ body.is-landscape-clock .reward-card {
     display: none !important;
 }
 
+/* ================= 10. 發薪日噴錢慶祝與極速關閉避尷尬特效 ================= */
+.payday-celebration-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 9998;
+    background: rgba(12, 15, 23, 0.55);
+    backdrop-filter: blur(4px);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    user-select: none;
+    animation: paydayFadeIn 0.25s ease-out;
+}
+
+@keyframes paydayFadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+.payday-canvas {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+}
+
+.payday-banner {
+    position: relative;
+    z-index: 10;
+    background: linear-gradient(135deg, rgba(26, 32, 48, 0.95), rgba(15, 23, 42, 0.95));
+    border: 1px solid rgba(251, 191, 36, 0.45);
+    box-shadow: 0 16px 36px rgba(0, 0, 0, 0.6), 0 0 30px rgba(251, 191, 36, 0.25);
+    border-radius: var(--radius-lg);
+    padding: 18px 26px;
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    max-width: 90%;
+    cursor: default;
+    animation: paydayScaleUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes paydayScaleUp {
+    from { transform: scale(0.9); opacity: 0; }
+    to { transform: scale(1); opacity: 1; }
+}
+
+.payday-banner-content {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+
+.payday-banner-icon {
+    font-size: 2.2rem;
+    animation: paydayBounce 1.5s infinite;
+}
+
+@keyframes paydayBounce {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-4px); }
+}
+
+.payday-banner-title {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: #fbbf24;
+    margin: 0 0 3px 0;
+    letter-spacing: -0.3px;
+}
+
+.payday-banner-desc {
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+    margin: 0;
+}
+
+.btn-close-payday {
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    color: #fff;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    font-size: 1.1rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+    flex-shrink: 0;
+}
+
+.btn-close-payday:hover {
+    background: rgba(239, 68, 68, 0.85);
+    border-color: rgba(239, 68, 68, 1);
+    transform: scale(1.08);
+}
+
+.payday-dismiss-hint {
+    position: absolute;
+    bottom: 32px;
+    color: rgba(255, 255, 255, 0.75);
+    font-size: 0.85rem;
+    background: rgba(0, 0, 0, 0.55);
+    backdrop-filter: blur(6px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    padding: 6px 14px;
+    border-radius: 9999px;
+    pointer-events: none;
+    letter-spacing: 0.2px;
+}
+
+.payday-clickable {
+    cursor: pointer;
+    transition: transform 0.2s ease;
+}
+
+.payday-clickable:hover {
+    text-decoration: underline;
+    opacity: 0.9;
+}

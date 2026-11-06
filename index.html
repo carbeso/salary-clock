@@ -319,6 +319,15 @@
                         <option value="clock">🕒 偽裝成數位時間時鐘 (HH:mm:ss)</option>
                     </select>
                 </div>
+
+                <!-- 音效偏好 -->
+                <div class="form-group" style="margin-top: 4px;">
+                    <label class="checkbox-label" for="cfg-sound-enabled">
+                        <input type="checkbox" id="cfg-sound-enabled">
+                        <span>啟用金幣與發薪音效提示（預設靜音）</span>
+                    </label>
+                    <span class="form-hint">純 Web Audio 程式碼合成清脆金幣聲，零音訊檔依賴，防窺時自動靜音</span>
+                </div>
             </div>
 
             <div class="drawer-footer">
@@ -326,6 +335,22 @@
                 <button id="btn-save-settings" class="btn btn-primary">儲存設定</button>
             </div>
         </div>
+    </div>
+
+    <!-- 發薪日噴錢慶祝特效層 (支援隨時點擊任意處、按 Esc、或按 B 立即中斷隱藏，杜絕上班尷尬) -->
+    <div id="payday-celebration-overlay" class="payday-celebration-overlay" style="display: none;" aria-hidden="true" role="dialog" aria-label="發薪日慶祝">
+        <canvas id="payday-canvas" class="payday-canvas"></canvas>
+        <div class="payday-banner">
+            <div class="payday-banner-content">
+                <span class="payday-banner-icon">🎉</span>
+                <div>
+                    <h2 class="payday-banner-title">今天發薪日！薪資已入袋 💰</h2>
+                    <p class="payday-banner-desc">辛苦整個月，犒賞自己一下吧！</p>
+                </div>
+            </div>
+            <button id="btn-close-payday" class="btn-close-payday" title="立即關閉 (Esc 或點擊任意處)" aria-label="立即關閉發薪慶祝">✕</button>
+        </div>
+        <div class="payday-dismiss-hint">點擊任意處、按 Esc 或 B 鍵立即關閉</div>
     </div>
 
     <!-- 畫中畫 (Document PiP) 專用 HUD 模板 -->
