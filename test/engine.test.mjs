@@ -1019,6 +1019,7 @@ assert(appJsContent.includes('startPoopBreak()'), 'app.js 必須實作 startPoop
 assert(appJsContent.includes('stopPoopBreak()'), 'app.js 必須實作 stopPoopBreak() 函式');
 assert(appJsContent.includes('closePoopModal()'), 'app.js 必須實作 closePoopModal() 函式');
 assert(appJsContent.includes('isPoopModalOpen()'), 'app.js 必須實作 isPoopModalOpen() 供 Escape 防窺安全攔截');
+assert(appJsContent.includes('getPoopElapsedSeconds'), 'app.js 必須實作 getPoopElapsedSeconds() 防待命/睡眠過度漂移保護');
 
 // 摸魚白嫖金額算術檢驗：摸魚 10 分鐘 (600秒)，每秒費率 0.05 元，白嫖應為 30 元
 const poopElapsedSeconds = 600;

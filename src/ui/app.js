@@ -448,9 +448,9 @@ class SalaryClockApp {
         const decimals = Number(this.config.decimalDigits) === 4 ? 4 : 2;
         const thousands = this.config.showThousandSeparator !== false;
 
-        // 帶薪摸魚即時碼錶更新 (若摸魚進行中)
+        // 帶薪摸魚即時碼錶更新 (若摸魚進行中，具備待命喚醒防漂移保護)
         if (this.isPooping && this.poopStartTime) {
-            const elapsedSec = Math.max(0, Math.floor((now.getTime() - this.poopStartTime) / 1000));
+            const elapsedSec = this.getPoopElapsedSeconds(now.getTime());
             const poopEarned = elapsedSec * (result.ratePerSecond || 0);
             if (this.dom.poopTimeDisplay) {
                 this.dom.poopTimeDisplay.textContent = formatStopwatch(elapsedSec);
@@ -1386,13 +1386,42 @@ class SalaryClockApp {
     }
 
     /**
+     * 計算當前摸魚有效秒數（具備電腦待命/睡眠過度漂移保護與下班時間自動截斷）
+     * @param {number} nowMs - 當前時間戳記
+     * @returns {number} 有效摸魚秒數
+     */
+    getPoopElapsedSeconds(nowMs = Date.now()) {
+        if (!this.poopStartTime) return 0;
+
+        const rawElapsedSec = Math.max(0, Math.floor((nowMs - this.poopStartTime) / 1000));
+
+        // 防待命隔夜/忘記關閉之安全上限保護 (單次摸魚上限 3 小時)
+        const MAX_POOP_SECONDS = 3 * 3600;
+        let safeElapsedSec = Math.min(rawElapsedSec, MAX_POOP_SECONDS);
+
+        // 上班族工作日模式：若摸魚開始於下班前，但目前已過下班時間，自動截斷至當天下班點
+        if (this.config.salaryMode === 'workday' && this.config.workEnd) {
+            const today = new Date(nowMs);
+            const [endHour, endMin] = this.config.workEnd.split(':').map(Number);
+            const endWorkMs = new Date(today.getFullYear(), today.getMonth(), today.getDate(), endHour || 18, endMin || 0, 0, 0).getTime();
+
+            if (this.poopStartTime < endWorkMs && nowMs > endWorkMs) {
+                const secToOff = Math.max(1, Math.floor((endWorkMs - this.poopStartTime) / 1000));
+                safeElapsedSec = Math.min(safeElapsedSec, secToOff);
+            }
+        }
+
+        return safeElapsedSec;
+    }
+
+    /**
      * 結束帶薪摸魚計時並展示白嫖戰報 (純記憶體結算，不寫入任何本機儲存紀錄)
      */
     stopPoopBreak() {
         if (!this.isPooping) return;
 
         const now = Date.now();
-        const elapsedSec = Math.max(1, Math.floor((now - (this.poopStartTime || now)) / 1000));
+        const elapsedSec = Math.max(1, this.getPoopElapsedSeconds(now));
         const rate = (this.lastCalculatedSalary && this.lastCalculatedSalary.ratePerSecond) ? this.lastCalculatedSalary.ratePerSecond : 0;
         const earned = elapsedSec * rate;
         const symbol = this.config.currencySymbol || 'NT$';
