@@ -70,10 +70,14 @@
                 <div class="disguise-overlay tabular-nums" id="disguise-overlay">NT$ ••••••</div>
             </div>
 
-            <!-- 次要資訊：下班倒數 -->
+            <!-- 次要資訊：下班倒數與發薪日倒數 -->
             <div class="hero-substats">
                 <div class="substat-item" id="countdown-wrapper">
                     距離下班：<strong class="tabular-nums" id="countdown-text">計算中...</strong>
+                </div>
+                <span class="substat-divider">·</span>
+                <div class="substat-item" id="payday-wrapper">
+                    距離發薪：<strong class="tabular-nums" id="payday-text">計算中...</strong>
                 </div>
             </div>
 
@@ -220,6 +224,12 @@
                     <label for="cfg-monthly-salary">每月固定底薪 (月薪)</label>
                     <input type="number" id="cfg-monthly-salary" class="form-control" min="0" step="1000">
                     <span class="form-hint">本機儲存空間 (LocalStorage) 獨立保存，安全無網路請求，保障財務隱私</span>
+                </div>
+
+                <div class="form-group" id="group-payday">
+                    <label for="cfg-payday">每月固定發薪日（幾號）</label>
+                    <input type="number" id="cfg-payday" class="form-control" min="1" max="31" step="1" placeholder="5">
+                    <span class="form-hint">預設為每月 5 號。發薪當日將自動切換為慶祝標籤 💰</span>
                 </div>
 
                 <div class="form-group" id="group-hourly-rate" style="display: none;">

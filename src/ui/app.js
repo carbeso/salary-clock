@@ -50,6 +50,8 @@ class SalaryClockApp {
             disguiseOverlay: document.getElementById('disguise-overlay'),
             countdownWrapper: document.getElementById('countdown-wrapper'),
             countdownText: document.getElementById('countdown-text'),
+            paydayWrapper: document.getElementById('payday-wrapper'),
+            paydayText: document.getElementById('payday-text'),
 
             // 自由接案碼錶操作
             freelanceControls: document.getElementById('freelance-controls'),
@@ -108,6 +110,7 @@ class SalaryClockApp {
             cfgSalaryMode: document.getElementById('cfg-salary-mode'),
             groupMonthlySalary: document.getElementById('group-monthly-salary'),
             cfgMonthlySalary: document.getElementById('cfg-monthly-salary'),
+            cfgPayday: document.getElementById('cfg-payday'),
             groupHourlyRate: document.getElementById('group-hourly-rate'),
             cfgHourlyRate: document.getElementById('cfg-hourly-rate'),
             cfgRewardType: document.getElementById('cfg-reward-type'),
@@ -625,6 +628,34 @@ class SalaryClockApp {
             }
         }
 
+        // 3.1 發薪日倒數（髒檢查賦值）
+        if (this.dom.paydayWrapper && this.dom.paydayText) {
+            if (result.mode === 'freelance') {
+                if (this.dom.paydayWrapper.style.display !== 'none') {
+                    this.dom.paydayWrapper.style.display = 'none';
+                }
+            } else {
+                if (this.dom.paydayWrapper.style.display !== 'inline-block') {
+                    this.dom.paydayWrapper.style.display = 'inline-block';
+                }
+                if (result.paydayInfo) {
+                    if (result.paydayInfo.isPayday) {
+                        const paydayLabel = '今天發薪日 🎉';
+                        if (this.dom.paydayText.textContent !== paydayLabel) {
+                            this.dom.paydayText.textContent = paydayLabel;
+                            this.dom.paydayText.style.color = '#fbbf24';
+                        }
+                    } else {
+                        const paydayLabel = `${result.paydayInfo.daysRemaining} 天`;
+                        if (this.dom.paydayText.textContent !== paydayLabel) {
+                            this.dom.paydayText.textContent = paydayLabel;
+                            this.dom.paydayText.style.color = '';
+                        }
+                    }
+                }
+            }
+        }
+
         // 4. 英雄卡對應累積進度條（髒檢查賦值）
         if (result.mode === 'freelance') {
             if (this.dom.heroProgressSection.style.display !== 'none') {
@@ -1098,6 +1129,9 @@ class SalaryClockApp {
     syncSettingsForm() {
         this.dom.cfgSalaryMode.value = this.config.salaryMode;
         this.dom.cfgMonthlySalary.value = this.config.monthlySalary;
+        if (this.dom.cfgPayday) {
+            this.dom.cfgPayday.value = this.config.payday || 5;
+        }
         this.dom.cfgHourlyRate.value = this.config.hourlyRate;
         this.dom.cfgRewardType.value = this.config.rewardType || 'latte';
         this.dom.cfgCustomName.value = this.config.rewardCustomName || '自訂目標';
@@ -1238,6 +1272,9 @@ class SalaryClockApp {
     saveSettingsFromForm() {
         this.config.salaryMode = this.dom.cfgSalaryMode.value;
         this.config.monthlySalary = Math.max(0, Number(this.dom.cfgMonthlySalary.value) || 0);
+        if (this.dom.cfgPayday) {
+            this.config.payday = Math.max(1, Math.min(31, parseInt(this.dom.cfgPayday.value, 10) || 5));
+        }
         this.config.hourlyRate = Math.max(0, Number(this.dom.cfgHourlyRate.value) || 0);
         this.config.rewardType = this.dom.cfgRewardType.value;
         // 輸入欄位安全防護說明：

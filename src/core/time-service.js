@@ -255,3 +255,46 @@ export function calculateTodayWorkProgress(now = new Date(), schedule = {}) {
         progressPercentage
     };
 }
+
+/**
+ * 計算發薪日倒數天數與是否為發薪日當天
+ * @param {Date} now - 當前日期
+ * @param {number} paydayDay - 每月發薪日 (1~31，預設 5)
+ * @returns {{ isPayday: boolean, daysRemaining: number }}
+ */
+export function calculatePaydayCountdown(now = new Date(), paydayDay = 5) {
+    const safePayday = Math.max(1, Math.min(31, Number(paydayDay) || 5));
+    const year = now.getFullYear();
+    const month = now.getMonth();
+    const todayDate = now.getDate();
+
+    // 當月發薪日 (若當月天數少於設定值則自動對齊該月最後一天)
+    const currentMonthDays = getDaysInMonth(year, month);
+    const targetDateCurrentMonth = Math.min(safePayday, currentMonthDays);
+
+    if (todayDate === targetDateCurrentMonth) {
+        return {
+            isPayday: true,
+            daysRemaining: 0
+        };
+    }
+
+    if (todayDate < targetDateCurrentMonth) {
+        return {
+            isPayday: false,
+            daysRemaining: targetDateCurrentMonth - todayDate
+        };
+    }
+
+    // 今日已過當月發薪日，計算距離下個月發薪日之剩餘自然天數
+    const nextMonthDate = new Date(year, month + 1, 1);
+    const nextMonthDays = getDaysInMonth(nextMonthDate.getFullYear(), nextMonthDate.getMonth());
+    const targetDateNextMonth = Math.min(safePayday, nextMonthDays);
+    const daysRemaining = (currentMonthDays - todayDate) + targetDateNextMonth;
+
+    return {
+        isPayday: false,
+        daysRemaining
+    };
+}
+

@@ -52,6 +52,7 @@ export const DEFAULT_CONFIG = {
     breakEnabled: true,            // 是否扣除午休
     breakStart: '12:00',           // 午休開始
     breakEnd: '13:00',             // 午休結束
+    payday: 5,                     // 每月發薪日 (1~31，預設 5 號)
 
     // 顯示與外觀偏好
     currencySymbol: 'NT$',         // 幣別符號

@@ -7,7 +7,8 @@ import {
     getDaysInMonth,
     getDailyEffectiveWorkSeconds,
     calculateTodayWorkProgress,
-    getWorkDaysInMonth
+    getWorkDaysInMonth,
+    calculatePaydayCountdown
 } from '../src/core/time-service.js';
 
 import {
@@ -1004,6 +1005,49 @@ assert(resContinuousOct1.weekProgress > 0 && resContinuousOct1.weekProgress < 10
 
 // 20.6 app.js 每週換算參考邏輯防縮水檢驗
 assert(appJsContent.includes("regularDays = result.regularWeekWorkDays ||"), 'app.js 必須採用常態工作天數計算固定工時每週換算參考，避免跨月縮短週時每週基準縮水');
+
+// ==========================================
+// 21. 每月固定發薪日倒數與慶祝標記測試
+// ==========================================
+console.log('\n--- 21. 發薪日倒數與當日標記測試 ---');
+
+// 21.1 當天為發薪日當天 (例如 2026-10-05，發薪日為 5 號)
+const paydayOct5 = new Date(2026, 9, 5, 14, 0, 0);
+const resPaydaySameDay = calculatePaydayCountdown(paydayOct5, 5);
+assert(resPaydaySameDay.isPayday === true, '當天日期為 5 號且發薪日為 5 號時，isPayday 應為 true');
+assert(resPaydaySameDay.daysRemaining === 0, '發薪日當天 daysRemaining 應為 0');
+
+// 21.2 發薪日尚未到達 (例如 2026-10-01，發薪日為 5 號)
+const paydayOct1 = new Date(2026, 9, 1, 9, 0, 0);
+const resPaydayBefore = calculatePaydayCountdown(paydayOct1, 5);
+assert(resPaydayBefore.isPayday === false, '發薪日前 isPayday 應為 false');
+assert(resPaydayBefore.daysRemaining === 4, '10/1 距離 10/5 發薪日剩餘天數應精確為 4 天');
+
+// 21.3 發薪日已過，跨月計算至下月發薪日 (例如 2026-10-10，發薪日為 5 號)
+// 10 月共 31 天，10/10 距離 10 月底還有 21 天，下月 11/5 為 5 天，共 26 天
+const paydayOct10 = new Date(2026, 9, 10, 10, 0, 0);
+const resPaydayNextMonth = calculatePaydayCountdown(paydayOct10, 5);
+assert(resPaydayNextMonth.isPayday === false, '發薪日已過時 isPayday 應為 false');
+assert(resPaydayNextMonth.daysRemaining === 26, '10/10 距離下月 11/5 發薪日剩餘天數應精確為 26 天');
+
+// 21.4 月底邊界天數安全夾取 (設定 31 號發薪，2026 年平年 2 月 28 天)
+const feb20 = new Date(2026, 1, 20, 10, 0, 0);
+const resPaydayFebClamped = calculatePaydayCountdown(feb20, 31);
+assert(resPaydayFebClamped.isPayday === false, '平年 2/20 未到月底發薪日');
+assert(resPaydayFebClamped.daysRemaining === 8, '平年 2/20 距離該月最後一天 2/28 發薪日應為 8 天');
+
+// 21.5 核心引擎 calculateSalary 回傳物件應整合 paydayInfo
+const salaryResultWithPayday = calculateSalary({ monthlySalary: 40000, payday: 5 }, paydayOct1);
+assert(salaryResultWithPayday.paydayInfo !== undefined, 'calculateSalary 回傳結果必須包含 paydayInfo 物件');
+assert(salaryResultWithPayday.paydayInfo.daysRemaining === 4, 'calculateSalary 注入之發薪倒數天數應正確為 4 天');
+
+// 21.6 DOM 結構與表單綁定驗證
+assert(indexContent.includes('id="payday-wrapper"'), 'index.html 必須包含 #payday-wrapper 節點');
+assert(indexContent.includes('id="payday-text"'), 'index.html 必須包含 #payday-text 節點');
+assert(indexContent.includes('id="cfg-payday"'), 'index.html 設定抽屜必須包含 #cfg-payday 輸入框');
+assert(stylesContent.includes('.substat-divider'), 'styles.css 必須包含 .substat-divider 分隔線樣式');
+assert(appJsContent.includes('cfgPayday'), 'app.js 必須快取 cfgPayday 元素');
+assert(appJsContent.includes('this.config.payday'), 'app.js 必須讀取與儲存 payday 設定');
 
 console.log(`\n🎉 全部 ${passedTests}/${totalTests} 項單元測試成功通過！核心運算、防窺隱私、效能快取與無障礙體驗驗證精確無誤。`);
 
