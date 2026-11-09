@@ -1102,6 +1102,32 @@ assert(appJsContent.includes('this.lastCalculatedSalary = result'), 'render 必�
 assert(appJsContent.includes('handlePaydayReplay'), 'app.js 必須實作 handlePaydayReplay 處理點擊或按鍵重播');
 assert(stylesContent.includes('.payday-clickable:focus-visible'), 'styles.css 必須包含 .payday-clickable:focus-visible 無障礙焦點樣式');
 
+// ==========================================
+// 24. PWA 漸進式網頁應用與離線支援檢驗
+// ==========================================
+console.log('\n--- 24. PWA 支援與離線快取檢驗 ---');
+
+const manifestPath = path.resolve(__dirname, '../manifest.webmanifest');
+assert(fs.existsSync(manifestPath), 'manifest.webmanifest 檔案必須存在');
+const manifestContent = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+assert(manifestContent.display === 'standalone', 'PWA 必須設定為獨立應用視窗 display: standalone');
+assert(manifestContent.start_url === './index.html', 'PWA start_url 應對齊 ./index.html');
+assert(Array.isArray(manifestContent.icons) && manifestContent.icons.length >= 1, 'PWA 必須包含有效圖示陣列');
+
+const swPath = path.resolve(__dirname, '../sw.js');
+assert(fs.existsSync(swPath), 'sw.js Service Worker 檔案必須存在');
+const swContent = fs.readFileSync(swPath, 'utf8');
+assert(swContent.includes("addEventListener('install'"), 'sw.js 必須實作 install 離線預快取');
+assert(swContent.includes("addEventListener('activate'"), 'sw.js 必須實作 activate 舊快取清理');
+assert(swContent.includes("addEventListener('fetch'"), 'sw.js 必須實作 fetch 請求攔截快取');
+
+const iconPath = path.resolve(__dirname, '../icons/icon.svg');
+assert(fs.existsSync(iconPath), 'icons/icon.svg 必須存在');
+
+assert(indexContent.includes('rel="manifest"'), 'index.html 必須包含 rel="manifest" 標籤');
+assert(indexContent.includes('name="apple-mobile-web-app-capable"'), 'index.html 必須包含 iOS Web App 支援標籤');
+assert(appJsContent.includes('navigator.serviceWorker.register'), 'app.js 必須包含 Service Worker 註冊呼叫');
+
 console.log(`\n🎉 全部 ${passedTests}/${totalTests} 項單元測試成功通過！核心運算、防窺隱私、效能快取與無障礙體驗驗證精確無誤。`);
 
 

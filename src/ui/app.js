@@ -1752,3 +1752,10 @@ class SalaryClockApp {
 window.addEventListener('DOMContentLoaded', () => {
     window.salaryClockApp = new SalaryClockApp();
 });
+
+// 註冊 PWA Service Worker (支援離線秒開與獨立視窗安裝)
+if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator && typeof window !== 'undefined' && window.location && window.location.protocol.startsWith('http')) {
+    window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js').catch(() => {});
+    });
+}
