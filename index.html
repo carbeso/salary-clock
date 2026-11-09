@@ -24,6 +24,10 @@
             <a href="https://github.com/carbeso/salary-clock" target="_blank" rel="noopener noreferrer" class="btn btn-github" title="前往 GitHub 檢視原始碼或 Fork">
                 <span class="btn-icon">🐙</span><span class="btn-text"> GitHub</span>
             </a>
+            <!-- 帶薪摸魚 / 如廁即時碼錶 (零紀錄、隨開即用) -->
+            <button id="btn-poop-break" class="btn btn-poop" title="開始帶薪摸魚即時計費（零儲存負擔）">
+                <span id="poop-btn-icon" class="btn-icon">🚽</span><span id="poop-btn-text" class="btn-text"> 摸魚</span>
+            </button>
             <!-- 桌面懸浮 / 手機全螢幕時鐘按鈕 -->
             <button id="btn-pip" class="btn btn-pip" title="彈出永遠置頂桌面懸浮小視窗 (支援 Chrome / Edge)">
                 <span id="pip-btn-icon" class="btn-icon">📌</span><span id="pip-btn-text" class="btn-text"> 桌面懸浮</span>
@@ -41,6 +45,19 @@
 
     <!-- 主要儀表板容器 -->
     <main class="main-container">
+
+        <!-- 帶薪摸魚浮動提示列 (摸魚進行中時即時顯示) -->
+        <div class="poop-banner" id="poop-banner" style="display: none;">
+            <div class="poop-banner-content">
+                <span class="poop-pulse-dot">🔴</span>
+                <span>帶薪摸魚中：</span>
+                <strong class="tabular-nums" id="poop-time-display">00:00</strong>
+                <span style="opacity: 0.4;">·</span>
+                <span>已白嫖：</span>
+                <strong class="tabular-nums disguise-target" id="poop-earned-display">NT$ 0.00</strong>
+            </div>
+            <button id="btn-stop-poop" class="btn btn-stop-poop" title="結束本次摸魚並查看戰報">🛑 結束摸魚結算</button>
+        </div>
 
         <!-- 1. 核心英雄卡片：聚焦展示選取維度的累積金額與戰利品換算 -->
         <section class="hero-card" id="hero-card">
@@ -351,6 +368,21 @@
             <button id="btn-close-payday" class="btn-close-payday" title="立即關閉 (Esc 或點擊任意處)" aria-label="立即關閉發薪慶祝">✕</button>
         </div>
         <div class="payday-dismiss-hint">點擊任意處、按 Esc 或 B 鍵立即關閉</div>
+    </div>
+
+    <!-- 帶薪摸魚結算彈窗 (無歷史紀錄，純當下爽感) -->
+    <div class="poop-modal-backdrop" id="poop-modal-backdrop" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="poop-modal-title">
+        <div class="poop-modal">
+            <span class="poop-modal-icon">🎉🚽💰</span>
+            <h3 class="poop-modal-title" id="poop-modal-title">帶薪摸魚戰報！</h3>
+            <p class="poop-modal-time">摸魚總時長：<strong id="poop-modal-duration">00 分 00 秒</strong></p>
+            <div class="poop-modal-amount-box">
+                <span class="poop-modal-amount-label">成功白嫖老闆</span>
+                <div class="poop-modal-amount tabular-nums" id="poop-modal-amount">NT$ 0.00</div>
+            </div>
+            <p class="poop-modal-reward-hint" id="poop-modal-reward-hint">相當於白賺了 0 杯拿鐵 ☕</p>
+            <button id="btn-close-poop-modal" class="btn btn-primary" style="width: 100%;">收穫滿滿，繼續奮鬥 💪</button>
+        </div>
     </div>
 
     <!-- 畫中畫 (Document PiP) 專用 HUD 模板 -->
