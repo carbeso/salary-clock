@@ -87,10 +87,14 @@
                 <div class="disguise-overlay tabular-nums" id="disguise-overlay">NT$ ••••••</div>
             </div>
 
-            <!-- 次要資訊：下班倒數 -->
+            <!-- 次要資訊：下班倒數與發薪日倒數 -->
             <div class="hero-substats">
                 <div class="substat-item" id="countdown-wrapper">
                     距離下班：<strong class="tabular-nums" id="countdown-text">計算中...</strong>
+                </div>
+                <span class="substat-divider">·</span>
+                <div class="substat-item" id="payday-wrapper">
+                    距離發薪：<strong class="tabular-nums" id="payday-text">計算中...</strong>
                 </div>
             </div>
 
@@ -239,6 +243,12 @@
                     <span class="form-hint">本機儲存空間 (LocalStorage) 獨立保存，安全無網路請求，保障財務隱私</span>
                 </div>
 
+                <div class="form-group" id="group-payday">
+                    <label for="cfg-payday">每月固定發薪日（幾號）</label>
+                    <input type="number" id="cfg-payday" class="form-control" min="1" max="31" step="1" placeholder="5">
+                    <span class="form-hint">預設為每月 5 號。發薪當日將自動切換為慶祝標籤 💰</span>
+                </div>
+
                 <div class="form-group" id="group-hourly-rate" style="display: none;">
                     <label for="cfg-hourly-rate">接案時薪 (或碼錶時薪)</label>
                     <input type="number" id="cfg-hourly-rate" class="form-control" min="0" step="10">
@@ -326,6 +336,15 @@
                         <option value="clock">🕒 偽裝成數位時間時鐘 (HH:mm:ss)</option>
                     </select>
                 </div>
+
+                <!-- 音效偏好 -->
+                <div class="form-group" style="margin-top: 4px;">
+                    <label class="checkbox-label" for="cfg-sound-enabled">
+                        <input type="checkbox" id="cfg-sound-enabled">
+                        <span>啟用金幣與發薪音效提示（預設靜音）</span>
+                    </label>
+                    <span class="form-hint">純 Web Audio 程式碼合成清脆金幣聲，零音訊檔依賴，防窺時自動靜音</span>
+                </div>
             </div>
 
             <div class="drawer-footer">
@@ -333,6 +352,22 @@
                 <button id="btn-save-settings" class="btn btn-primary">儲存設定</button>
             </div>
         </div>
+    </div>
+
+    <!-- 發薪日噴錢慶祝特效層 (支援隨時點擊任意處、按 Esc、或按 B 立即中斷隱藏，杜絕上班尷尬) -->
+    <div id="payday-celebration-overlay" class="payday-celebration-overlay" style="display: none;" aria-hidden="true" role="dialog" aria-label="發薪日慶祝">
+        <canvas id="payday-canvas" class="payday-canvas"></canvas>
+        <div class="payday-banner">
+            <div class="payday-banner-content">
+                <span class="payday-banner-icon">🎉</span>
+                <div>
+                    <h2 class="payday-banner-title">今天發薪日！薪資已入袋 💰</h2>
+                    <p class="payday-banner-desc">辛苦整個月，犒賞自己一下吧！</p>
+                </div>
+            </div>
+            <button id="btn-close-payday" class="btn-close-payday" title="立即關閉 (Esc 或點擊任意處)" aria-label="立即關閉發薪慶祝">✕</button>
+        </div>
+        <div class="payday-dismiss-hint">點擊任意處、按 Esc 或 B 鍵立即關閉</div>
     </div>
 
     <!-- 帶薪摸魚結算彈窗 (無歷史紀錄，純當下爽感) -->

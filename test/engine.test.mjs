@@ -7,7 +7,8 @@ import {
     getDaysInMonth,
     getDailyEffectiveWorkSeconds,
     calculateTodayWorkProgress,
-    getWorkDaysInMonth
+    getWorkDaysInMonth,
+    calculatePaydayCountdown
 } from '../src/core/time-service.js';
 
 import {
@@ -1027,7 +1028,82 @@ const testRatePerSecond = 0.05;
 const calculatedPoopEarned = poopElapsedSeconds * testRatePerSecond;
 assert(Math.abs(calculatedPoopEarned - 30) < 0.0001, '摸魚 600 秒且每秒 0.05 元時，白嫖金額應精確為 30 元');
 
+// ==========================================
+// 22. 每月固定發薪日倒數與慶祝標記測試
+// ==========================================
+console.log('\n--- 22. 發薪日倒數與當日標記測試 ---');
+
+// 22.1 當天為發薪日當天 (例如 2026-10-05，發薪日為 5 號)
+const paydayOct5 = new Date(2026, 9, 5, 14, 0, 0);
+const resPaydaySameDay = calculatePaydayCountdown(paydayOct5, 5);
+assert(resPaydaySameDay.isPayday === true, '當天日期為 5 號且發薪日為 5 號時，isPayday 應為 true');
+assert(resPaydaySameDay.daysRemaining === 0, '發薪日當天 daysRemaining 應為 0');
+
+// 22.2 發薪日尚未到達 (例如 2026-10-01，發薪日為 5 號)
+const paydayOct1 = new Date(2026, 9, 1, 9, 0, 0);
+const resPaydayBefore = calculatePaydayCountdown(paydayOct1, 5);
+assert(resPaydayBefore.isPayday === false, '發薪日前 isPayday 應為 false');
+assert(resPaydayBefore.daysRemaining === 4, '10/1 距離 10/5 發薪日剩餘天數應精確為 4 天');
+
+// 22.3 發薪日已過，跨月計算至下月發薪日 (例如 2026-10-10，發薪日為 5 號)
+// 10 月共 31 天，10/10 距離 10 月底還有 21 天，下月 11/5 為 5 天，共 26 天
+const paydayOct10 = new Date(2026, 9, 10, 10, 0, 0);
+const resPaydayNextMonth = calculatePaydayCountdown(paydayOct10, 5);
+assert(resPaydayNextMonth.isPayday === false, '發薪日已過時 isPayday 應為 false');
+assert(resPaydayNextMonth.daysRemaining === 26, '10/10 距離下月 11/5 發薪日剩餘天數應精確為 26 天');
+
+// 22.4 月底邊界天數安全夾取 (設定 31 號發薪，2026 年平年 2 月 28 天)
+const feb20 = new Date(2026, 1, 20, 10, 0, 0);
+const resPaydayFebClamped = calculatePaydayCountdown(feb20, 31);
+assert(resPaydayFebClamped.isPayday === false, '平年 2/20 未到月底發薪日');
+assert(resPaydayFebClamped.daysRemaining === 8, '平年 2/20 距離該月最後一天 2/28 發薪日應為 8 天');
+
+// 22.5 核心引擎 calculateSalary 回傳物件應整合 paydayInfo
+const salaryResultWithPayday = calculateSalary({ monthlySalary: 40000, payday: 5 }, paydayOct1);
+assert(salaryResultWithPayday.paydayInfo !== undefined, 'calculateSalary 回傳結果必須包含 paydayInfo 物件');
+assert(salaryResultWithPayday.paydayInfo.daysRemaining === 4, 'calculateSalary 注入之發薪倒數天數應正確為 4 天');
+
+// 22.6 DOM 結構與表單綁定驗證
+assert(indexContent.includes('id="payday-wrapper"'), 'index.html 必須包含 #payday-wrapper 節點');
+assert(indexContent.includes('id="payday-text"'), 'index.html 必須包含 #payday-text 節點');
+assert(indexContent.includes('id="cfg-payday"'), 'index.html 設定抽屜必須包含 #cfg-payday 輸入框');
+assert(stylesContent.includes('.substat-divider'), 'styles.css 必須包含 .substat-divider 分隔線樣式');
+assert(appJsContent.includes('cfgPayday'), 'app.js 必須快取 cfgPayday 元素');
+assert(appJsContent.includes('this.config.payday'), 'app.js 必須讀取與儲存 payday 設定');
+
+// 22.7 發薪日噴錢慶祝、Web Audio 音效與防上班尷尬急煞測試
+console.log('\n--- 23. 發薪日噴錢慶祝特效與防上班尷尬急煞測試 ---');
+assert(indexContent.includes('id="payday-celebration-overlay"'), 'index.html 必須包含 #payday-celebration-overlay 特效容器');
+assert(indexContent.includes('id="payday-canvas"'), 'index.html 必須包含 #payday-canvas 金幣雨畫布');
+assert(indexContent.includes('id="btn-close-payday"'), 'index.html 必須包含 #btn-close-payday 立即關閉按鈕');
+assert(indexContent.includes('id="cfg-sound-enabled"'), 'index.html 設定抽屜必須包含 #cfg-sound-enabled 音效開關');
+assert(stylesContent.includes('.payday-celebration-overlay'), 'styles.css 必須包含 .payday-celebration-overlay 遮罩樣式');
+assert(stylesContent.includes('.payday-banner'), 'styles.css 必須包含 .payday-banner 慶祝橫幅樣式');
+assert(stylesContent.includes('.btn-close-payday'), 'styles.css 必須包含 .btn-close-payday 關閉按鈕樣式');
+assert(appJsContent.includes('triggerPaydayCelebration'), 'app.js 必須實作 triggerPaydayCelebration() 觸發噴錢特效');
+assert(appJsContent.includes('stopPaydayCelebration'), 'app.js 必須實作 stopPaydayCelebration() 立即中斷特效');
+assert(appJsContent.includes('stopAllSounds'), 'app.js 必須在急煞中止與防窺切換時調用 stopAllSounds()');
+assert(appJsContent.includes('playPaydayFanfare'), 'app.js 必須整合 playPaydayFanfare Web Audio 合成音效');
+
+// 22.8 聲音模組在無音訊環境（如 Node.js / 測試環境）的容錯性
+const { playPaydayFanfare: testFanfare, stopAllSounds: testStopSounds } = await import('../src/utils/sound.js');
+assert(typeof testFanfare === 'function', 'sound.js 必須匯出 playPaydayFanfare 函式');
+assert(typeof testStopSounds === 'function', 'sound.js 必須匯出 stopAllSounds 函式');
+// 在無音訊驅動環境下呼叫應靜默降級，不拋出錯誤
+testFanfare();
+testStopSounds();
+assert(true, 'sound.js 在無音效驅動之環境下安全呼叫不拋錯');
+
+// 22.9 音效預設設定值檢驗
+assert(DEFAULT_CONFIG.soundEnabled === false, '預設音效開關必須為 false (尊重辦公室安靜環境，零尷尬)');
+
+// 22.10 發薪日標記點擊重播與鍵盤無障礙支援驗證
+assert(appJsContent.includes('this.lastCalculatedSalary = result'), 'render 必須將計算結果正確賦值給 this.lastCalculatedSalary 供點擊判斷');
+assert(appJsContent.includes('handlePaydayReplay'), 'app.js 必須實作 handlePaydayReplay 處理點擊或按鍵重播');
+assert(stylesContent.includes('.payday-clickable:focus-visible'), 'styles.css 必須包含 .payday-clickable:focus-visible 無障礙焦點樣式');
+
 console.log(`\n🎉 全部 ${passedTests}/${totalTests} 項單元測試成功通過！核心運算、防窺隱私、效能快取與無障礙體驗驗證精確無誤。`);
+
 
 
 
