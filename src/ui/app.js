@@ -13,7 +13,7 @@ import {
 } from '../utils/formatters.js';
 import { BossKeyController } from './boss-key.js';
 import { PiPController } from './pip-controller.js';
-import { playPaydayFanfare, stopAllSounds } from '../utils/sound.js';
+import { playPaydayFanfare, playKaChingSound, stopAllSounds } from '../utils/sound.js';
 
 class SalaryClockApp {
     constructor() {
@@ -158,6 +158,10 @@ class SalaryClockApp {
         this.isPooping = false;
         this.poopStartTime = null;
         this.lastCalculatedSalary = null;
+
+        // 里程碑成就音效觸發快取 (避免初次開啟重複發聲)
+        this.lastMilestoneThousand = null;
+        this.lastRewardUnits = null;
 
         // 初始化子模組
         this.bossKey = new BossKeyController({
@@ -673,6 +677,30 @@ class SalaryClockApp {
         const heroAriaLabel = isDisguised ? '已啟用防窺保護' : formattedHeroAmount;
         if (this.dom.heroAmount && this.dom.heroAmount.getAttribute('aria-label') !== heroAriaLabel) {
             this.dom.heroAmount.setAttribute('aria-label', heroAriaLabel);
+        }
+
+        // 里程碑成就音效觸發 (若有啟用且未處於防窺保護狀態)
+        if (typeof targetAmount === 'number' && !isNaN(targetAmount) && targetAmount > 0) {
+            const currentThousand = Math.floor(targetAmount / 1000);
+            const rewardUnits = result.rewardInfo ? Math.floor(result.rewardInfo.count || 0) : 0;
+
+            if (this.lastMilestoneThousand === null) {
+                // 初次計算時僅記錄初始基準，防範頁面剛打開立即發聲
+                this.lastMilestoneThousand = currentThousand;
+                this.lastRewardUnits = rewardUnits;
+            } else {
+                const reachedNewThousand = currentThousand > this.lastMilestoneThousand;
+                const reachedNewReward = rewardUnits > this.lastRewardUnits;
+
+                if (reachedNewThousand || reachedNewReward) {
+                    this.lastMilestoneThousand = currentThousand;
+                    this.lastRewardUnits = rewardUnits;
+
+                    if (this.config.soundEnabled && !isDisguised) {
+                        playKaChingSound();
+                    }
+                }
+            }
         }
 
         // 針對 33ms 高頻跳動的進度條，動態切換 .no-transition 類別（髒檢查比對，避免每幀重複 toggle）
