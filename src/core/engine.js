@@ -11,7 +11,8 @@ import {
     calculateTodayWorkProgress,
     getWeekWorkDaysInfo,
     isWorkDay,
-    parseTimeString
+    parseTimeString,
+    calculatePaydayCountdown
 } from './time-service.js';
 
 import { REWARD_PRESETS } from './storage.js';
@@ -467,14 +468,24 @@ export function calculateFreelanceMode(config, now = new Date()) {
  */
 export function calculateSalary(config, now = new Date()) {
     const mode = config.salaryMode || 'workday';
+    let result;
 
     switch (mode) {
         case 'continuous':
-            return calculateContinuousMode(config, now);
+            result = calculateContinuousMode(config, now);
+            break;
         case 'freelance':
-            return calculateFreelanceMode(config, now);
+            result = calculateFreelanceMode(config, now);
+            break;
         case 'workday':
         default:
-            return calculateWorkdayMode(config, now);
+            result = calculateWorkdayMode(config, now);
+            break;
     }
+
+    // 注入每月發薪日倒數資訊 (預設 5 號)
+    const payday = config.payday || 5;
+    result.paydayInfo = calculatePaydayCountdown(now, payday);
+
+    return result;
 }

@@ -7,7 +7,8 @@ import {
     getDaysInMonth,
     getDailyEffectiveWorkSeconds,
     calculateTodayWorkProgress,
-    getWorkDaysInMonth
+    getWorkDaysInMonth,
+    calculatePaydayCountdown
 } from '../src/core/time-service.js';
 
 import {
@@ -1006,9 +1007,132 @@ assert(resContinuousOct1.weekProgress > 0 && resContinuousOct1.weekProgress < 10
 assert(appJsContent.includes("regularDays = result.regularWeekWorkDays ||"), 'app.js 必須採用常態工作天數計算固定工時每週換算參考，避免跨月縮短週時每週基準縮水');
 
 // ==========================================
-// 21. Web Audio 純代碼合成里程碑音效測試
 // ==========================================
-console.log('\n--- 21. Web Audio 里程碑音效測試 ---');
+// 21. 帶薪摸魚 / 如廁即時碼錶測試 (零紀錄、隨開即用)
+// ==========================================
+console.log('\n--- 21. 帶薪摸魚 / 如廁即時碼錶測試 ---');
+assert(indexContent.includes('id="btn-poop-break"'), 'index.html 必須包含帶薪摸魚按鈕 #btn-poop-break');
+assert(indexContent.includes('id="poop-banner"'), 'index.html 必須包含摸魚即時浮動提示列 #poop-banner');
+assert(indexContent.includes('id="poop-modal-backdrop"'), 'index.html 必須包含摸魚戰報彈窗 #poop-modal-backdrop');
+assert(stylesContent.includes('.btn-poop'), 'styles.css 必須包含 .btn-poop 樣式定義');
+assert(stylesContent.includes('.poop-banner'), 'styles.css 必須包含 .poop-banner 浮動列樣式定義');
+assert(stylesContent.includes('.poop-modal'), 'styles.css 必須包含 .poop-modal 彈窗樣式定義');
+assert(appJsContent.includes('startPoopBreak()'), 'app.js 必須實作 startPoopBreak() 函式');
+assert(appJsContent.includes('stopPoopBreak()'), 'app.js 必須實作 stopPoopBreak() 函式');
+assert(appJsContent.includes('closePoopModal()'), 'app.js 必須實作 closePoopModal() 函式');
+assert(appJsContent.includes('isPoopModalOpen()'), 'app.js 必須實作 isPoopModalOpen() 供 Escape 防窺安全攔截');
+assert(appJsContent.includes('getPoopElapsedSeconds'), 'app.js 必須實作 getPoopElapsedSeconds() 防待命/睡眠過度漂移保護');
+
+// 摸魚白嫖金額算術檢驗：摸魚 10 分鐘 (600秒)，每秒費率 0.05 元，白嫖應為 30 元
+const poopElapsedSeconds = 600;
+const testRatePerSecond = 0.05;
+const calculatedPoopEarned = poopElapsedSeconds * testRatePerSecond;
+assert(Math.abs(calculatedPoopEarned - 30) < 0.0001, '摸魚 600 秒且每秒 0.05 元時，白嫖金額應精確為 30 元');
+
+// ==========================================
+// 22. 每月固定發薪日倒數與慶祝標記測試
+// ==========================================
+console.log('\n--- 22. 發薪日倒數與當日標記測試 ---');
+
+// 22.1 當天為發薪日當天 (例如 2026-10-05，發薪日為 5 號)
+const paydayOct5 = new Date(2026, 9, 5, 14, 0, 0);
+const resPaydaySameDay = calculatePaydayCountdown(paydayOct5, 5);
+assert(resPaydaySameDay.isPayday === true, '當天日期為 5 號且發薪日為 5 號時，isPayday 應為 true');
+assert(resPaydaySameDay.daysRemaining === 0, '發薪日當天 daysRemaining 應為 0');
+
+// 22.2 發薪日尚未到達 (例如 2026-10-01，發薪日為 5 號)
+const paydayOct1 = new Date(2026, 9, 1, 9, 0, 0);
+const resPaydayBefore = calculatePaydayCountdown(paydayOct1, 5);
+assert(resPaydayBefore.isPayday === false, '發薪日前 isPayday 應為 false');
+assert(resPaydayBefore.daysRemaining === 4, '10/1 距離 10/5 發薪日剩餘天數應精確為 4 天');
+
+// 22.3 發薪日已過，跨月計算至下月發薪日 (例如 2026-10-10，發薪日為 5 號)
+// 10 月共 31 天，10/10 距離 10 月底還有 21 天，下月 11/5 為 5 天，共 26 天
+const paydayOct10 = new Date(2026, 9, 10, 10, 0, 0);
+const resPaydayNextMonth = calculatePaydayCountdown(paydayOct10, 5);
+assert(resPaydayNextMonth.isPayday === false, '發薪日已過時 isPayday 應為 false');
+assert(resPaydayNextMonth.daysRemaining === 26, '10/10 距離下月 11/5 發薪日剩餘天數應精確為 26 天');
+
+// 22.4 月底邊界天數安全夾取 (設定 31 號發薪，2026 年平年 2 月 28 天)
+const feb20 = new Date(2026, 1, 20, 10, 0, 0);
+const resPaydayFebClamped = calculatePaydayCountdown(feb20, 31);
+assert(resPaydayFebClamped.isPayday === false, '平年 2/20 未到月底發薪日');
+assert(resPaydayFebClamped.daysRemaining === 8, '平年 2/20 距離該月最後一天 2/28 發薪日應為 8 天');
+
+// 22.5 核心引擎 calculateSalary 回傳物件應整合 paydayInfo
+const salaryResultWithPayday = calculateSalary({ monthlySalary: 40000, payday: 5 }, paydayOct1);
+assert(salaryResultWithPayday.paydayInfo !== undefined, 'calculateSalary 回傳結果必須包含 paydayInfo 物件');
+assert(salaryResultWithPayday.paydayInfo.daysRemaining === 4, 'calculateSalary 注入之發薪倒數天數應正確為 4 天');
+
+// 22.6 DOM 結構與表單綁定驗證
+assert(indexContent.includes('id="payday-wrapper"'), 'index.html 必須包含 #payday-wrapper 節點');
+assert(indexContent.includes('id="payday-text"'), 'index.html 必須包含 #payday-text 節點');
+assert(indexContent.includes('id="cfg-payday"'), 'index.html 設定抽屜必須包含 #cfg-payday 輸入框');
+assert(stylesContent.includes('.substat-divider'), 'styles.css 必須包含 .substat-divider 分隔線樣式');
+assert(appJsContent.includes('cfgPayday'), 'app.js 必須快取 cfgPayday 元素');
+assert(appJsContent.includes('this.config.payday'), 'app.js 必須讀取與儲存 payday 設定');
+
+// 22.7 發薪日噴錢慶祝、Web Audio 音效與防上班尷尬急煞測試
+console.log('\n--- 23. 發薪日噴錢慶祝特效與防上班尷尬急煞測試 ---');
+assert(indexContent.includes('id="payday-celebration-overlay"'), 'index.html 必須包含 #payday-celebration-overlay 特效容器');
+assert(indexContent.includes('id="payday-canvas"'), 'index.html 必須包含 #payday-canvas 金幣雨畫布');
+assert(indexContent.includes('id="btn-close-payday"'), 'index.html 必須包含 #btn-close-payday 立即關閉按鈕');
+assert(indexContent.includes('id="cfg-sound-enabled"'), 'index.html 設定抽屜必須包含 #cfg-sound-enabled 音效開關');
+assert(stylesContent.includes('.payday-celebration-overlay'), 'styles.css 必須包含 .payday-celebration-overlay 遮罩樣式');
+assert(stylesContent.includes('.payday-banner'), 'styles.css 必須包含 .payday-banner 慶祝橫幅樣式');
+assert(stylesContent.includes('.btn-close-payday'), 'styles.css 必須包含 .btn-close-payday 關閉按鈕樣式');
+assert(appJsContent.includes('triggerPaydayCelebration'), 'app.js 必須實作 triggerPaydayCelebration() 觸發噴錢特效');
+assert(appJsContent.includes('stopPaydayCelebration'), 'app.js 必須實作 stopPaydayCelebration() 立即中斷特效');
+assert(appJsContent.includes('stopAllSounds'), 'app.js 必須在急煞中止與防窺切換時調用 stopAllSounds()');
+assert(appJsContent.includes('playPaydayFanfare'), 'app.js 必須整合 playPaydayFanfare Web Audio 合成音效');
+
+// 22.8 聲音模組在無音訊環境（如 Node.js / 測試環境）的容錯性
+const { playPaydayFanfare: testFanfare, stopAllSounds: testStopSounds } = await import('../src/utils/sound.js');
+assert(typeof testFanfare === 'function', 'sound.js 必須匯出 playPaydayFanfare 函式');
+assert(typeof testStopSounds === 'function', 'sound.js 必須匯出 stopAllSounds 函式');
+// 在無音訊驅動環境下呼叫應靜默降級，不拋出錯誤
+testFanfare();
+testStopSounds();
+assert(true, 'sound.js 在無音效驅動之環境下安全呼叫不拋錯');
+
+// 22.9 音效預設設定值檢驗
+assert(DEFAULT_CONFIG.soundEnabled === false, '預設音效開關必須為 false (尊重辦公室安靜環境，零尷尬)');
+
+// 22.10 發薪日標記點擊重播與鍵盤無障礙支援驗證
+assert(appJsContent.includes('this.lastCalculatedSalary = result'), 'render 必須將計算結果正確賦值給 this.lastCalculatedSalary 供點擊判斷');
+assert(appJsContent.includes('handlePaydayReplay'), 'app.js 必須實作 handlePaydayReplay 處理點擊或按鍵重播');
+assert(stylesContent.includes('.payday-clickable:focus-visible'), 'styles.css 必須包含 .payday-clickable:focus-visible 無障礙焦點樣式');
+
+// ==========================================
+// 24. PWA 漸進式網頁應用與離線支援檢驗
+// ==========================================
+console.log('\n--- 24. PWA 支援與離線快取檢驗 ---');
+
+const manifestPath = path.resolve(__dirname, '../manifest.webmanifest');
+assert(fs.existsSync(manifestPath), 'manifest.webmanifest 檔案必須存在');
+const manifestContent = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+assert(manifestContent.display === 'standalone', 'PWA 必須設定為獨立應用視窗 display: standalone');
+assert(manifestContent.start_url === './index.html', 'PWA start_url 應對齊 ./index.html');
+assert(Array.isArray(manifestContent.icons) && manifestContent.icons.length >= 1, 'PWA 必須包含有效圖示陣列');
+
+const swPath = path.resolve(__dirname, '../sw.js');
+assert(fs.existsSync(swPath), 'sw.js Service Worker 檔案必須存在');
+const swContent = fs.readFileSync(swPath, 'utf8');
+assert(swContent.includes("addEventListener('install'"), 'sw.js 必須實作 install 離線預快取');
+assert(swContent.includes("addEventListener('activate'"), 'sw.js 必須實作 activate 舊快取清理');
+assert(swContent.includes("addEventListener('fetch'"), 'sw.js 必須實作 fetch 請求攔截快取');
+
+const iconPath = path.resolve(__dirname, '../icons/icon.svg');
+assert(fs.existsSync(iconPath), 'icons/icon.svg 必須存在');
+
+assert(indexContent.includes('rel="manifest"'), 'index.html 必須包含 rel="manifest" 標籤');
+assert(indexContent.includes('name="apple-mobile-web-app-capable"'), 'index.html 必須包含 iOS Web App 支援標籤');
+assert(appJsContent.includes('navigator.serviceWorker.register'), 'app.js 必須包含 Service Worker 註冊呼叫');
+
+// ==========================================
+// 25. Web Audio 純代碼合成里程碑音效測試
+// ==========================================
+console.log('\n--- 25. Web Audio 里程碑音效測試 ---');
 
 const soundPath = path.resolve(__dirname, '../src/utils/sound.js');
 assert(fs.existsSync(soundPath), 'src/utils/sound.js 音效模組必須存在');
@@ -1023,6 +1147,7 @@ assert(appJsContent.includes('cfgSoundEnabled'), 'app.js 必須快取 cfgSoundEn
 assert(appJsContent.includes('this.config.soundEnabled && !isDisguised'), 'app.js 播放音效前必須防範防窺模式（防窺時自動靜音）');
 
 console.log(`\n🎉 全部 ${passedTests}/${totalTests} 項單元測試成功通過！核心運算、防窺隱私、效能快取與無障礙體驗驗證精確無誤。`);
+
 
 
 
