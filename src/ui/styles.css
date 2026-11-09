@@ -1395,10 +1395,24 @@ body.is-landscape-clock .reward-card {
 
 .payday-clickable {
     cursor: pointer;
-    transition: transform 0.2s ease;
+    user-select: none;
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    border-radius: var(--radius-sm, 6px);
+    padding: 2px 6px;
+    margin: -2px -6px;
 }
 
 .payday-clickable:hover {
-    text-decoration: underline;
-    opacity: 0.9;
+    background: rgba(251, 191, 36, 0.15);
+    text-shadow: 0 0 12px rgba(251, 191, 36, 0.5);
+    transform: scale(1.05);
+}
+
+.payday-clickable:active {
+    transform: scale(0.96);
+}
+
+.payday-clickable:focus-visible {
+    outline: 2px solid #fbbf24;
+    outline-offset: 2px;
 }

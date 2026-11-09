@@ -177,6 +177,7 @@ class SalaryClockApp {
         this.paydayAnimFrameId = null;
         this.paydayCelebrationTimeout = null;
         this.paydayParticles = [];
+        this.lastCalculatedSalary = null;
 
         this.init();
     }
@@ -367,12 +368,31 @@ class SalaryClockApp {
                 this.stopPaydayCelebration();
             });
         }
+
+        // 發薪當日點擊發薪日標籤或按 Enter 鍵，隨時重播撒錢慶祝特效
+        const handlePaydayReplay = (e) => {
+            const isPayday = (this.lastCalculatedSalary && this.lastCalculatedSalary.paydayInfo && this.lastCalculatedSalary.paydayInfo.isPayday) ||
+                             (this.dom.paydayWrapper && this.dom.paydayWrapper.classList.contains('payday-clickable')) ||
+                             (this.dom.paydayText && this.dom.paydayText.textContent.includes('發薪日'));
+            if (isPayday) {
+                if (e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                }
+                this.triggerPaydayCelebration(true);
+            }
+        };
+
         if (this.dom.paydayWrapper) {
-            this.dom.paydayWrapper.addEventListener('click', () => {
-                if (this.lastCalculatedSalary && this.lastCalculatedSalary.paydayInfo && this.lastCalculatedSalary.paydayInfo.isPayday) {
-                    this.triggerPaydayCelebration(true);
+            this.dom.paydayWrapper.addEventListener('click', handlePaydayReplay);
+            this.dom.paydayWrapper.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' || e.key === ' ' || e.key === 'Spacebar') {
+                    handlePaydayReplay(e);
                 }
             });
+        }
+        if (this.dom.paydayText) {
+            this.dom.paydayText.addEventListener('click', handlePaydayReplay);
         }
 
         // 視窗失焦時立即中止發薪慶祝特效與音效 (切換軟體或 Alt-Tab 即刻靜音避尷尬)
@@ -448,6 +468,8 @@ class SalaryClockApp {
      * @param {Date} now - 當前精確時間
      */
     render(result, now) {
+        this.lastCalculatedSalary = result;
+
         const symbol = this.config.currencySymbol || 'NT$';
         // 僅允許 2 位（按秒跳動）或 4 位（轉動增加）
         const decimals = Number(this.config.decimalDigits) === 4 ? 4 : 2;
@@ -691,6 +713,9 @@ class SalaryClockApp {
                             this.dom.paydayText.style.color = '#fbbf24';
                             this.dom.paydayWrapper.classList.add('payday-clickable');
                             this.dom.paydayWrapper.title = '發薪當日點擊可重播慶祝特效 💰';
+                            this.dom.paydayWrapper.setAttribute('role', 'button');
+                            this.dom.paydayWrapper.setAttribute('tabindex', '0');
+                            this.dom.paydayWrapper.setAttribute('aria-label', '今天發薪日，點擊或按 Enter 重播慶祝特效');
                         }
                         // 發薪日當日初次載入自動觸發一次慶祝噴錢特效 (非防窺時)
                         const todayStr = new Date().toDateString();
@@ -704,6 +729,9 @@ class SalaryClockApp {
                             this.dom.paydayText.style.color = '';
                             this.dom.paydayWrapper.classList.remove('payday-clickable');
                             this.dom.paydayWrapper.removeAttribute('title');
+                            this.dom.paydayWrapper.removeAttribute('role');
+                            this.dom.paydayWrapper.removeAttribute('tabindex');
+                            this.dom.paydayWrapper.removeAttribute('aria-label');
                         }
                     }
                 }

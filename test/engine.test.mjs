@@ -1075,6 +1075,11 @@ assert(true, 'sound.js 在無音效驅動之環境下安全呼叫不拋錯');
 // 21.9 音效預設設定值檢驗
 assert(DEFAULT_CONFIG.soundEnabled === false, '預設音效開關必須為 false (尊重辦公室安靜環境，零尷尬)');
 
+// 21.10 發薪日標記點擊重播與鍵盤無障礙支援驗證
+assert(appJsContent.includes('this.lastCalculatedSalary = result'), 'render 必須將計算結果正確賦值給 this.lastCalculatedSalary 供點擊判斷');
+assert(appJsContent.includes('handlePaydayReplay'), 'app.js 必須實作 handlePaydayReplay 處理點擊或按鍵重播');
+assert(stylesContent.includes('.payday-clickable:focus-visible'), 'styles.css 必須包含 .payday-clickable:focus-visible 無障礙焦點樣式');
+
 console.log(`\n🎉 全部 ${passedTests}/${totalTests} 項單元測試成功通過！核心運算、防窺隱私、效能快取與無障礙體驗驗證精確無誤。`);
 
 
