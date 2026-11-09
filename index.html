@@ -29,6 +29,10 @@
             <a href="https://github.com/carbeso/salary-clock" target="_blank" rel="noopener noreferrer" class="btn btn-github" title="前往 GitHub 檢視原始碼或 Fork">
                 <span class="btn-icon">🐙</span><span class="btn-text"> GitHub</span>
             </a>
+            <!-- 帶薪摸魚 / 如廁即時碼錶 (零紀錄、隨開即用) -->
+            <button id="btn-poop-break" class="btn btn-poop" title="開始帶薪摸魚即時計費（零儲存負擔）">
+                <span id="poop-btn-icon" class="btn-icon">🚽</span><span id="poop-btn-text" class="btn-text"> 摸魚</span>
+            </button>
             <!-- 桌面懸浮 / 手機全螢幕時鐘按鈕 -->
             <button id="btn-pip" class="btn btn-pip" title="彈出永遠置頂桌面懸浮小視窗 (支援 Chrome / Edge)">
                 <span id="pip-btn-icon" class="btn-icon">📌</span><span id="pip-btn-text" class="btn-text"> 桌面懸浮</span>
@@ -46,6 +50,19 @@
 
     <!-- 主要儀表板容器 -->
     <main class="main-container">
+
+        <!-- 帶薪摸魚浮動提示列 (摸魚進行中時即時顯示) -->
+        <div class="poop-banner" id="poop-banner" style="display: none;">
+            <div class="poop-banner-content">
+                <span class="poop-pulse-dot">🔴</span>
+                <span>帶薪摸魚中：</span>
+                <strong class="tabular-nums" id="poop-time-display">00:00</strong>
+                <span style="opacity: 0.4;">·</span>
+                <span>已白嫖：</span>
+                <strong class="tabular-nums disguise-target" id="poop-earned-display">NT$ 0.00</strong>
+            </div>
+            <button id="btn-stop-poop" class="btn btn-stop-poop" title="結束本次摸魚並查看戰報">🛑 結束摸魚結算</button>
+        </div>
 
         <!-- 1. 核心英雄卡片：聚焦展示選取維度的累積金額與戰利品換算 -->
         <section class="hero-card" id="hero-card">
@@ -75,10 +92,14 @@
                 <div class="disguise-overlay tabular-nums" id="disguise-overlay">NT$ ••••••</div>
             </div>
 
-            <!-- 次要資訊：下班倒數 -->
+            <!-- 次要資訊：下班倒數與發薪日倒數 -->
             <div class="hero-substats">
                 <div class="substat-item" id="countdown-wrapper">
                     距離下班：<strong class="tabular-nums" id="countdown-text">計算中...</strong>
+                </div>
+                <span class="substat-divider">·</span>
+                <div class="substat-item" id="payday-wrapper">
+                    距離發薪：<strong class="tabular-nums" id="payday-text">計算中...</strong>
                 </div>
             </div>
 
@@ -227,6 +248,12 @@
                     <span class="form-hint">本機儲存空間 (LocalStorage) 獨立保存，安全無網路請求，保障財務隱私</span>
                 </div>
 
+                <div class="form-group" id="group-payday">
+                    <label for="cfg-payday">每月固定發薪日（幾號）</label>
+                    <input type="number" id="cfg-payday" class="form-control" min="1" max="31" step="1" placeholder="5">
+                    <span class="form-hint">預設為每月 5 號。發薪當日將自動切換為慶祝標籤 💰</span>
+                </div>
+
                 <div class="form-group" id="group-hourly-rate" style="display: none;">
                     <label for="cfg-hourly-rate">接案時薪 (或碼錶時薪)</label>
                     <input type="number" id="cfg-hourly-rate" class="form-control" min="0" step="10">
@@ -314,12 +341,52 @@
                         <option value="clock">🕒 偽裝成數位時間時鐘 (HH:mm:ss)</option>
                     </select>
                 </div>
+
+                <!-- 音效偏好 -->
+                <div class="form-group" style="margin-top: 4px;">
+                    <label class="checkbox-label" for="cfg-sound-enabled">
+                        <input type="checkbox" id="cfg-sound-enabled">
+                        <span>啟用金幣與發薪音效提示（預設靜音）</span>
+                    </label>
+                    <span class="form-hint">純 Web Audio 程式碼合成清脆金幣聲，零音訊檔依賴，防窺時自動靜音</span>
+                </div>
             </div>
 
             <div class="drawer-footer">
                 <button id="btn-reset-defaults" class="btn">還原預設</button>
                 <button id="btn-save-settings" class="btn btn-primary">儲存設定</button>
             </div>
+        </div>
+    </div>
+
+    <!-- 發薪日噴錢慶祝特效層 (支援隨時點擊任意處、按 Esc、或按 B 立即中斷隱藏，杜絕上班尷尬) -->
+    <div id="payday-celebration-overlay" class="payday-celebration-overlay" style="display: none;" aria-hidden="true" role="dialog" aria-label="發薪日慶祝">
+        <canvas id="payday-canvas" class="payday-canvas"></canvas>
+        <div class="payday-banner">
+            <div class="payday-banner-content">
+                <span class="payday-banner-icon">🎉</span>
+                <div>
+                    <h2 class="payday-banner-title">今天發薪日！薪資已入袋 💰</h2>
+                    <p class="payday-banner-desc">辛苦整個月，犒賞自己一下吧！</p>
+                </div>
+            </div>
+            <button id="btn-close-payday" class="btn-close-payday" title="立即關閉 (Esc 或點擊任意處)" aria-label="立即關閉發薪慶祝">✕</button>
+        </div>
+        <div class="payday-dismiss-hint">點擊任意處、按 Esc 或 B 鍵立即關閉</div>
+    </div>
+
+    <!-- 帶薪摸魚結算彈窗 (無歷史紀錄，純當下爽感) -->
+    <div class="poop-modal-backdrop" id="poop-modal-backdrop" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="poop-modal-title">
+        <div class="poop-modal">
+            <span class="poop-modal-icon">🎉🚽💰</span>
+            <h3 class="poop-modal-title" id="poop-modal-title">帶薪摸魚戰報！</h3>
+            <p class="poop-modal-time">摸魚總時長：<strong id="poop-modal-duration">00 分 00 秒</strong></p>
+            <div class="poop-modal-amount-box">
+                <span class="poop-modal-amount-label">成功白嫖老闆</span>
+                <div class="poop-modal-amount tabular-nums" id="poop-modal-amount">NT$ 0.00</div>
+            </div>
+            <p class="poop-modal-reward-hint" id="poop-modal-reward-hint">相當於白賺了 0 杯拿鐵 ☕</p>
+            <button id="btn-close-poop-modal" class="btn btn-primary" style="width: 100%;">收穫滿滿，繼續奮鬥 💪</button>
         </div>
     </div>
 

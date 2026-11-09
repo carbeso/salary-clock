@@ -52,11 +52,13 @@ export const DEFAULT_CONFIG = {
     breakEnabled: true,            // 是否扣除午休
     breakStart: '12:00',           // 午休開始
     breakEnd: '13:00',             // 午休結束
+    payday: 5,                     // 每月發薪日 (1~31，預設 5 號)
 
     // 顯示與外觀偏好
     currencySymbol: 'NT$',         // 幣別符號
     decimalDigits: 2,              // 小數點位數 (2~4)
     showThousandSeparator: true,   // 是否顯示千分位
+    soundEnabled: false,           // 音效開關 (里程碑與發薪日慶祝音效，預設靜音)
 
     // 多元趣味激勵指標
     rewardType: 'latte',           // 'latte', 'bigmac', 'etf0050', 'tsmc', 'bubbletea', 'custom'
