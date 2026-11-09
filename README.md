@@ -1,120 +1,84 @@
-# 🕒 薪資時鐘 (Salary Clock) - 即時薪資視覺化工具
+# 🕒 薪資時鐘 (Salary Clock)
 
-一個輕量、流暢、隱私優先的即時薪資視覺化工具。精準計算工作日每一微秒的收入累積，並將努力換算為實體獎勵（例如：咖啡、雞排、便當），讓每一刻的工作付出都看得見！
+> 一個極致輕量、流暢、隱私優先的即時薪資視覺化工具。精準計算每一微秒的工時價值，將努力轉化為實體獎勵（如咖啡、便當、雞排），讓工作的每分付出都清晰可見！
 
-支援最新 Chrome / Edge 原生 **畫中畫置頂懸浮視窗 (Document PiP)** 與 **一鍵老闆鍵防窺保護**。
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Zero Dependencies](https://img.shields.io/badge/Dependencies-0-brightgreen.svg)](#-核心特色)
+[![PWA Ready](https://img.shields.io/badge/PWA-Ready-orange.svg)](#-核心特色)
+[![Tests Passing](https://img.shields.io/badge/Tests-236%20Pass-success.svg)](test/engine.test.mjs)
 
 👉 **線上免安裝立即體驗 (Live Demo)**：[https://salary-clock-378.pages.dev/](https://salary-clock-378.pages.dev/)
 
 ---
 
-## 💡 專案緣起與鳴謝 (Credits)
-
-本專案的核心構想源自社群同好的交流與啟發。因深感在漫長工作日中看著微小進度跳動能帶來極大心理慰藉，特此致謝：
-
-- **概念發起人**：感謝 [@duratgw0413 在 Threads 上的概念發起與程式實作分享](https://www.threads.com/@duratgw0413/post/Dc2-zrRGMUX)
-- **討論串發起人**：感謝 [@termcavetw 發起的 Threads 討論串交流](https://www.threads.com/@termcavetw/post/DcyMmfQDzqw)
-
-本版本在此基礎上進一步重構與功能延伸：
-- 升級為 **Document Picture-in-Picture API**，不需安裝第三方軟體即可在 Windows 桌面置頂懸浮。
-- 引入 **4 位數老虎機微秒級轉輪 (Slot Machine Reel)**，極致流暢且精準對齊。
-- 加入嚴謹的淨工時防漂移、午休凍結、平閏年換算與工作日/自由接案雙模式。
-
-歡迎社群同好自由 Fork、提出 PR 或分享修改建議！
-
----
-
 ## ✨ 核心特色
 
-1. **4 位數微秒老虎機滾輪**
-   - 英雄卡數字末 4 位數採用垂直機械滾輪動畫，毫秒級轉動帶來源源不絕的滿足感。
-   - 經像素級垂直居中校正，切換維度平滑無卡頓。
-
-2. **原生桌面置頂懸浮 (Document PiP)**
-   - 運用最新瀏覽器標準 Document Picture-in-Picture API。
-   - 無需安裝龐大的 Electron 軟體，直接以輕量獨立小視窗懸浮在桌面最上層。
-
-3. **老闆鍵與防窺雙重保護**
-   - 主畫面支援快速鍵 `B` 或 `Esc` 快速切換防窺模式。
-   - 懸浮小視窗支援點擊直接切換防窺；防窺時自動偽裝為低調數位時鐘或星號遮罩，避免在主管或同事面前露出薪資數字。
-
-4. **多維度累計與換算參考**
-   - 提供「今日」、「本週」、「本月」三種累積金額切換。
-   - 動態換算「每秒 / 每分 / 每時 / 每天」產值，一目了然。
-
-5. **趣味實體獎勵換算與累進進度**
-   - 自動將當前收益換算為咖啡、雞排、便當、電影票、大麥克或拉麵等實體獎勵數量。
-   - 簡約精緻的累進進度條，即時呈現距離下一個解鎖單位的達成比例（如 45.2%）。
-
-6. **100% 隱私安全 (LocalStorage 純本地儲存空間)**
-   - 純本機運作，所有薪資設定皆保存在瀏覽器的 `LocalStorage` 本機儲存空間中。
-   - 不使用 Cookie（避免資料隨 HTTP 請求往返伺服器），零網路連線、零追蹤、零上傳，徹底杜絕外洩風險。
+1. **隨開即用，零配置門檻 (Zero Setup)**
+   - 打開網頁即可自動起跑，不需複雜的日曆同步或初始化設定。
+2. **100% 本機隱私與安全 (Privacy First)**
+   - 所有薪資設定僅保存在本機 `localStorage`，零 Cookie、零後端連線、零資料上傳。
+3. **原生桌面置頂懸浮 (Document PiP)**
+   - 採用瀏覽器最新 Document Picture-in-Picture API，網頁也能在桌面右下角以獨立小視窗永遠置頂，免裝肥大軟體。
+4. **4 位數微秒機械滾輪 (Slot Machine Reel)**
+   - 英雄卡末 4 位數具備平滑流暢的老虎機垂直機械位移，帶來極佳視覺滿足感。
+5. **雙重防窺老闆鍵 (Boss Key)**
+   - 按 `B` 或 `Esc` 瞬間切換為星號遮罩或低調數位時鐘，同事主管走近不尷尬。
+6. **帶薪摸魚即時碼錶 (Paid Poop Break)**
+   - 點擊即刻啟動，具備待命睡眠防過度漂移保護與下班時間自動截斷，純當下爽感零儲存負擔。
+7. **每月發薪日倒數與噴錢慶祝 (Payday Celebration)**
+   - 自動倒數發薪日；發薪當日滿天金幣雨與 Web Audio 賀彩樂音，支援 Esc 瞬間斷音急煞與點擊回味重播。
+8. **PWA 支援與離線秒開 (Offline PWA)**
+   - 支援安裝為桌面或手機獨立 App，無網路環境亦能秒速開啟。
+9. **純 Web Audio 合成音效**
+   - 零外部音訊檔案，千元里程碑與發薪日音效純代碼合成，預設靜音、防窺時自動靜音。
 
 ---
 
-## 🗺️ 專案藍圖 (Roadmap)
+## 🚀 快速上手 (Quick Start)
 
-- [x] **Web 網頁版**：純靜態零依賴 Vanilla JS 架構，支援現代桌面瀏覽器與 Document PiP。
-- [ ] **Windows 原生桌面版 (Tauri v2)**：
-  - 規劃以 Tauri v2 + Rust 建置，原生支援系統匣 (System Tray)、全螢幕遊戲覆蓋 (Game Overlay) 與全域老闆鍵快速鍵 (`Win + Alt + B`)。
-- [ ] **Android 原生 App (Capacitor)**：
-  - 規劃使用 Capacitor 封裝，搭配 Android 前景常駐服務 (Foreground Service)，支援常駐通知欄即時跳動與桌面小工具 (App Widget)。
-- [ ] **macOS / iOS 平台說明**：
-  - ⚠️ **暫無發行計畫**：因目前開發者缺乏 Mac 電腦、iPhone 實體硬體設備及 Apple 開發者帳號 (Apple Developer Program)，短期內無法進行建置、除錯與上架。未來若有設備支援或社群夥伴願意協助打包發布，十分歡迎 PR 協作！
+本專案為純靜態網頁，**完全無建置流程 (No Build Step)**：
 
----
-
-## 🚀 快速上手 (本地執行)
-
-本專案無任何建置步驟（No Build Step），任何現代瀏覽器皆可直接運行：
-
-### 方法一：直接點擊
-雙擊 `index.html` 即可在瀏覽器開啟。*(註：部分瀏覽器限制 `file://` 協議下的進階 PiP API，建議使用本地伺服器)*
-
-### 方法二：本地 HTTP 伺服器 (推薦)
-使用 Laragon、Live Server 或指令列工具：
-
+### 本地直接執行
 ```bash
-# 使用 npx serve
+# 使用 npx 快速預覽
 npx serve .
 
 # 或使用 Python 內建伺服器
 python -m http.server 8080
 ```
-開啟瀏覽器前往 `http://localhost:8080` 即可體驗完整功能。
+瀏覽器開啟 `http://localhost:8080` 即可使用。
 
 ---
 
-## 🌐 Cloudflare Pages 免費公開部署教學
+## 📚 專案文件導覽 (Documentation)
 
-本專案完全為靜態檔案，非常推薦使用 **Cloudflare Pages** 進行全球免費託管發布：
+更深入的技術細節與設計架構，請參閱 `docs/` 文件夾：
 
-### 步驟說明：
-1. **將專案推送到 GitHub**：
-   - 依下述「Git 提交流程」將程式碼推送至您的 GitHub 個人儲存庫。
-2. **登入 Cloudflare Dashboard**：
-   - 前往 [Cloudflare 儀表板](https://dash.cloudflare.com/)。
-   - 進入左側選單的 **「Workers 和 Pages」 (Workers & Pages)** -> 點選 **「建立應用程式」 (Create application)** -> 選擇 **「Pages」** 標籤頁。
-3. **連結 GitHub 儲存庫**：
-   - 點選 **「連線至 Git」 (Connect to Git)** 並授權選取 `salary-clock` 儲存庫。
-4. **設定建置參數 (Build Settings)**：
-   - **專案名稱 (Project name)**：可自訂，如 `salary-clock`。
-   - **生產分支 (Production branch)**：選擇 `main`。
-   - **架構預設 (Framework preset)**：選擇 `None`。
-   - **建置命令 (Build command)**：**留空**（不需要任何編譯指令）。
-   - **建置輸出目錄 (Build output directory)**：填入 `/` 或留空。
-5. **儲存並部署 (Save and Deploy)**：
-   - 點擊「儲存並部署」，Cloudflare 會在數秒內完成全球 CDN 發布，並提供一個專屬網址（例如 `https://salary-clock.pages.dev`）供任何人公開訪問！
+- 🛠️ **[技術棧文件 (Tech Stack)](docs/TECH_STACK.md)**：使用的現代 Web API、CSS 規範與純原生架構說明。
+- 🏛️ **[系統架構文件 (Architecture)](docs/ARCHITECTURE.md)**：模組分層、目錄對照、狀態生命週期與資料流動圖。
+- 🧠 **[設計邏輯與演算法 (Design Logic)](docs/DESIGN_LOGIC.md)**：淨工時排除、跨月首週工作天換算、防睡眠漂移與數值公式。
+- 🤖 **[AI Agent 開發指引 (AGENT.md)](AGENT.md)**：專為 AI 助理與開發者設計的快速掌握手冊與不變原則。
+- 📱 **[跨平台原生打包指引 (Platform Guide)](docs/PLATFORM_GUIDE.md)**：Tauri 桌面版與 Android 原生常駐服務規劃。
+- 📋 **[需求規格說明書 (Requirements)](docs/REQUIREMENTS.md)**：原始桌面版概念剖析與功能規劃規格。
 
 ---
 
-## 🧪 單元測試
+## 🧪 單元測試 (Unit Tests)
 
-本專案針對核心計薪演算法、淨工時折算、平閏年天數與工作日排程撰寫了完整的單元測試：
+專案配備完整測試套件，涵蓋演算法運算、跨月防縮水、發薪日倒數、音效容錯與 PWA 檢驗：
 
 ```bash
+npm test
+# 或
 node test/engine.test.mjs
 ```
+
+---
+
+## 💡 專案緣起與鳴謝 (Credits)
+
+- **概念發起人**：感謝 [@duratgw0413 在 Threads 上的概念發起與程式實作分享](https://www.threads.com/@duratgw0413/post/Dc2-zrRGMUX)
+- **討論串發起人**：感謝 [@termcavetw 發起的 Threads 討論串交流](https://www.threads.com/@termcavetw/post/DcyMmfQDzqw)
 
 ---
 
